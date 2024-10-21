@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="point_cloud_features" type="pointnet_fea_ros.py" name="point_cloud_features" output="screen" respawn="false">
+  </node>
+  
+  <node pkg="point_cloud_features" type="pointnet_glb_fea_ros.py" name="point_cloud_features_global" output="screen" respawn="false">
+  </node>
+</launch>

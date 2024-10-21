@@ -1,0 +1,48 @@
+autoware_tracker:
+
+    cluster:
+        label_source: "/image_detections"
+        extrinsic_calibration: "/home/tianbot/online_learning_ws/src/autoware_tracker/config/calib.txt"
+        iou_threshold: 0.3
+
+        points_node: "/radar_convert"
+
+        output_frame: "velodyne"
+
+        remove_ground: false
+
+        downsample_cloud: false
+        leaf_size: 0.1
+
+        use_multiple_thres: true
+
+        cluster_size_min: 6
+        cluster_size_max: 150
+        clip_min_height: -1.8
+        clip_max_height: 3
+        cluster_merge_threshold: 1.5
+        clustering_distance: 1.5
+        remove_points_min: 2
+        remove_points_max: 100.0
+
+        keep_lanes: false
+        keep_lane_left_distance: 5.0
+        keep_lane_right_distance: 5.0
+
+        use_diffnormals: false
+        pose_estimation: true
+
+    tracker:
+        gating_thres: 9.22
+        gate_probability: 0.99
+        detection_probability: 0.9
+        life_time_thres: 8
+        static_velocity_thres: 0.5
+        static_num_history_thres: 3
+        prevent_explosion_thres: 1000
+        merge_distance_threshold: 0.5
+        use_sukf: false
+
+        tracking_frame: "/world"
+         # namespace: /detection/object_tracker/
+        track_probability: 0.7

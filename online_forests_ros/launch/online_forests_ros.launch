@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="scence" default="0000" />
+  <arg name="noise" default="0000" />
+  <arg name="kitti" default="true" />
+  <node pkg="online_forests_ros" type="IMF_iusl.py" name="random_forest_node_online" output="screen" respawn="false">
+    <param name="scence" type="string" value="$(arg scence)"/>
+    <param name="noise" type="string" value="$(arg noise)"/>
+    <param name="kitti" type="bool" value="$(arg kitti)"/>
+  </node>
+</launch> 

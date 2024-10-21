@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="scence" default="0000" />
+  <arg name="visibility" default="100" />
+
+  <node pkg="kitti_velodyne_ros" type="kitti_velodyne_ros_iusl" name="kitti_velodyne_ros" output="screen" respawn="false">
+    <param name="scence" type="string" value="$(arg scence)"/>
+    <param name="visibility" type="string" value="$(arg visibility)"/>
+    <param name="frequency" type="double" value="10"/>
+  </node>
+
+
+  <!-- Image Detections -->
+  <node pkg="kitti_camera_ros" type="kitti_camera_ros" name="kitti_camera_ros" output="screen" respawn="false">
+    <param name="scence" type="string" value="$(arg scence)"/>
+    <param name="frequency" type="double" value="10"/>
+  </node>
+  
+
+  
+  <rosparam file="$(find autoware_tracker)/config/params_iusl_cb.yaml" command="load" />
+  <node pkg="autoware_tracker" type="lidar_euclidean_cluster_detect" name="lidar_euclidean_cluster_detect" output="screen" />
+  <node pkg="autoware_tracker" type="imm_ukf_pda" name="imm_ukf_pda" output="screen" />
+    <param name="autoware_tracker/tracker/is_benchmark" type="bool" value="false"/>
+  <node pkg="autoware_tracker" type="visualize_detected_objects" name="ukf_track_visualization" output="screen" />
+
+
+
+  <!-- Feature -->
+  <node pkg="point_cloud_features" type="point_cloud_features" name="point_cloud_features" output="screen" respawn="false">
+    <param name="minimum_points"         type="int"  value="5"/>
+    <param name="number_of_points"       type="bool" value="true"/>
+    <param name="min_distance"           type="bool" value="true"/>
+    <param name="covariance_mat3D"       type="bool" value="true"/>
+    <param name="normalized_MOIT"        type="bool" value="true"/>
+    <param name="slice_feature"          type="bool" value="true"/>
+    <param name="intensity_distribution" type="bool" value="true"/>
+  </node>
+
+<!-- Feature_global -->
+  <node pkg="point_cloud_features" type="point_cloud_features_global" name="point_cloud_features_global" output="screen" respawn="false">
+    <param name="minimum_points"         type="int"  value="5"/>
+    <param name="number_of_points"       type="bool" value="true"/>
+    <param name="min_distance"           type="bool" value="true"/>
+    <param name="covariance_mat3D"       type="bool" value="true"/>
+    <param name="normalized_MOIT"        type="bool" value="true"/>
+    <param name="slice_feature"          type="bool" value="true"/>
+    <param name="intensity_distribution" type="bool" value="true"/>
+  </node>
+
+
+  <!-- <node pkg="online_forests_ros" type="online_forests_ros" name="online_forests_ros" output="screen" respawn="false">
+    <param name="conf_file_name" type="string" value="$(find online_forests_ros)/config/orf.conf"/>
+    <param name="mode" type="int" value="2"/>
+    <param name="minimum_samples" type="int" value="1"/>
+    <param name="save_forest" type="bool" value="false"/>
+    <param name="model_file_name" type="string" value="/home/tianbot/online_learning_ws/src/online_forests_ros/model/train.model"/> -->
+  <!-- </node> --> 
+
+
+
+  <node pkg="rviz" type="rviz" name="rviz" args="-d /home/tianbot/online_learning_ws_mini/src/launch/efficient_online_learning.rviz"/>
+</launch>

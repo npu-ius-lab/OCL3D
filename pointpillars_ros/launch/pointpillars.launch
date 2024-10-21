@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="scence" default="0000" />
+  <arg name="output" default="false" />
+  <node pkg="pointpillars_ros" type="pointpillars_ros.py" name="pointpillars" output="screen" respawn="false">
+    <param name="scence" type="string" value="$(arg scence)"/>
+    <param name="output" type="bool" value="$(arg output)"/>
+  </node>
+</launch>

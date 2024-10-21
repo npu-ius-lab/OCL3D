@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/home/tianbot/efficient_online_learning-master/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/tianbot/efficient_online_learning-master/src/online_forests_ros/include/**",
+        "/home/tianbot/efficient_online_learning-master/src/point_cloud_features/include/**",
+        "/home/tianbot/efficient_online_learning-master/src/vision_msgs/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS"
+    }
+  ],
+  "version": 4
+}
