@@ -22,7 +22,7 @@ We use the following implementations:
    ```bash
    cd catkin_ws catkin_make
 3. We provide two scripts to run the OCL3D method:
-   ```Run OCL3D on the KITTI tracking dataset using PointNet features and PointPillars:
-   ./run_kitti_pillars_pointnet.sh
-   ```Run OCL3D on the IUSL dataset using handcrafted features:
-   ./run_iusl_hand.sh
+   Run OCL3D on the KITTI tracking dataset using PointNet features and PointPillars:
+   ```./run_kitti_pillars_pointnet.sh```
+   Run OCL3D on the IUSL dataset using handcrafted features:
+   ```./run_iusl_hand.sh```
