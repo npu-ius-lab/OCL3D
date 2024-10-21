@@ -3,6 +3,8 @@ This repository contains the code for the paper **"Semi-Supervised Online Contin
 
 ## Abstract
 Continual learning addresses the challenge of acquiring and retaining knowledge over time across multiple tasks and environments. Previous research primarily focuses on offline settings where models learn through increasing tasks from samples paired with ground truth annotations. In this work, we focus on an unsolved, challenging, yet practical scenario: specifically, semi-supervised online continual learning in autonomous driving and mobile robotics. In our settings, models are tasked with learning new distributions from streaming unlabeled samples and performing 3D object detection as soon as the LiDAR point cloud arrives. Additionally, we conducted experiments on both the KITTI dataset, our newly built IUSL dataset, and the Canadian Adverse Driving Conditions (CADC) dataset. The results indicate that our method achieves a balance between rapid adaptation and knowledge retention, showcasing its effectiveness in the dynamic and complex environment of autonomous driving and mobile robotics.
+## Dataset
+The collected IUSL dataset can be get through xxx
 
 ## How to Build & Run
 
