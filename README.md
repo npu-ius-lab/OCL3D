@@ -43,4 +43,18 @@ We use the following implementations:
 ## Important Note:
 **Patchwork++ cannot be compiled with OCL3D in the same workspace. Please place them in two separate workspaces.**
 
+# Cite
+```
+@article{liu2024semi,
+  title={Semi-Supervised Online Continual Learning for 3D Object Detection in Mobile Robotics},
+  author={Liu, Binhong and Yao, Dexin and Yang, Rui and Yan, Zhi and Yang, Tao},
+  journal={Journal of Intelligent \& Robotic Systems},
+  volume={110},
+  number={4},
+  pages={1--16},
+  year={2024},
+  publisher={Springer}
+}
+```
+
 
