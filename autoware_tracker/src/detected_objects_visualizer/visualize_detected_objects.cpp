@@ -835,44 +835,49 @@ VisualizeDetectedObjects::ObjectsToLabels_forests(const autoware_tracker::Detect
 
                         label_marker.id = marker_id_++;
 
-                        // Object Class if available
-                        if(!object.label.empty() && object.label != "9.0")
-                                if(object.label == "0") {
-                                        label_marker.text = "Car ";
-                                } else if(object.label == "1") {
-                                        label_marker.text = "Pedestrian ";
-                                } else if(object.label == "2") {
-                                        label_marker.text = "Cyclist ";
-                                }
+                        std::string class_name;
+                        if (object.label == "0")
+                        {
+                                class_name = "Car";
+                        }
+                        else if (object.label == "1")
+                        {
+                                class_name = "Pedestrian";
+                        }
+                        else if (object.label == "2")
+                        {
+                                class_name = "Cyclist";
+                        }
+                        else
+                        {
+                                class_name = "Unknown";
+                        }
 
-                                tf::Quaternion q(object.pose.orientation.x,
-                                        object.pose.orientation.y,
-                                        object.pose.orientation.z,
-                                        object.pose.orientation.w);
-                                double roll, pitch, yaw;
+                        tf::Quaternion q(object.pose.orientation.x,
+                                         object.pose.orientation.y,
+                                         object.pose.orientation.z,
+                                         object.pose.orientation.w);
+                        double roll, pitch, yaw;
+                        tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
 
-                                tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-
-                                
-                                if(!object.label.empty() && object.label != "9"){
-                                        std::string text = "\n<" + std::to_string(object.id) + ">";
-                                        label_marker.text += text;
-                                        std::string text_yaw = "\n" + std::to_string(yaw * 57.3);
-                                        label_marker.text += text_yaw;
-                                        std::string text_dims = "\n" + std::to_string(object.dimensions.x) + " " + std::to_string(object.dimensions.y) + " "+ std::to_string(object.dimensions.z);
-                                        label_marker.text += text_dims;
-                                        std::string result_file_path = "/home/lbh/online_learning_ws_mini/src/autoware_tracker/src/detected_objects_visualizer/orient.txt";
-                                        std::ofstream outputfile(result_file_path, std::ofstream::out | std::ofstream::app);
-                                        outputfile << std::to_string(yaw * 57.3) + " "
-                                        << std::to_string(object.dimensions.x) + " " + std::to_string(object.dimensions.y) + " "+ std::to_string(object.dimensions.z) + " "
-                                        << object.label + "\n";
-                                        outputfile.close();
-                                }
-                                
+                        std::ostringstream label_stream;
+                        label_stream << std::fixed << std::setprecision(2);
+                        label_stream << class_name << "\n";
+                        label_stream << "id " << object.id << "\n";
+                        label_stream << "pos "
+                                     << object.pose.position.x << " "
+                                     << object.pose.position.y << " "
+                                     << object.pose.position.z << "\n";
+                        label_stream << "size "
+                                     << object.dimensions.x << " "
+                                     << object.dimensions.y << " "
+                                     << object.dimensions.z << "\n";
+                        label_stream << "yaw " << yaw * 180.0 / M_PI;
+                        label_marker.text = label_stream.str();
 
                         label_marker.pose.position.x = object.pose.position.x;
                         label_marker.pose.position.y = object.pose.position.y;
-                        label_marker.pose.position.z = label_height_forests_;
+                        label_marker.pose.position.z = object.pose.position.z + object.dimensions.z * 0.5 + 0.4;
 
                         
                         
