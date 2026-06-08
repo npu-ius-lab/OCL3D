@@ -9,6 +9,8 @@
   <arg name="fallback_label" default="" />
   <arg name="replay_buffer_size_per_class" default="512" />
   <arg name="replay_samples_per_class" default="8" />
+  <arg name="warmup_samples_per_class" default="30" />
+  <arg name="warmup_max_callbacks" default="120" />
   <node pkg="online_forests_ros" type="IMF_iusl.py" name="random_forest_node_online" output="screen" respawn="false">
     <param name="scence" type="string" value="$(arg scence)"/>
     <param name="noise" type="string" value="$(arg noise)"/>
@@ -19,5 +21,7 @@
     <param name="fallback_label" type="string" value="$(arg fallback_label)"/>
     <param name="replay_buffer_size_per_class" type="int" value="$(arg replay_buffer_size_per_class)"/>
     <param name="replay_samples_per_class" type="int" value="$(arg replay_samples_per_class)"/>
+    <param name="warmup_samples_per_class" type="int" value="$(arg warmup_samples_per_class)"/>
+    <param name="warmup_max_callbacks" type="int" value="$(arg warmup_max_callbacks)"/>
   </node>
 </launch> 
