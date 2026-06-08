@@ -34,17 +34,6 @@ ${catkin_LIBRARIES}
 )
 
 
-add_executable(point_cloud_feature_pillars
-src/point_cloud_feature_extractor_global_pillars.cpp
-src/${PROJECT_NAME}/point_cloud_features.cpp
-)
- 
-target_link_libraries(point_cloud_feature_pillars
-${catkin_LIBRARIES}
-)
-
-
-  
 if(catkin_EXPORTED_TARGETS)
   add_dependencies(point_cloud_features
     ${catkin_EXPORTED_TARGETS}

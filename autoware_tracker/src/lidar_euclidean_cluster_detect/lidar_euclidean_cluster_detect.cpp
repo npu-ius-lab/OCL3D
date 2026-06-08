@@ -99,6 +99,7 @@ ros::Publisher _pub_points_lanes_cloud;
 
 ros::Publisher _pub_detected_objects;
 ros::Publisher _pub_cluster_boxes_markers;
+ros::Publisher _pub_image_associated_boxes_markers;
 
 std_msgs::Header _velodyne_header;
 
@@ -177,75 +178,139 @@ bool isPersonSizedCluster(const ClusterPtr &cluster)
                length >= _person_min_length && length <= _person_max_length;
 }
 
+bool addConvexHullBoxMarker(visualization_msgs::MarkerArray &markers,
+                            const geometry_msgs::PolygonStamped &convex_hull,
+                            const std_msgs::Header &header,
+                            const std::string &ns,
+                            const int id,
+                            const std_msgs::ColorRGBA &color,
+                            const double line_width)
+{
+        const auto &points = convex_hull.polygon.points;
+        if (points.size() < 6 || points.size() % 2 != 0)
+        {
+                return false;
+        }
+
+        const size_t layer_size = points.size() / 2;
+        visualization_msgs::Marker marker;
+        marker.header = header;
+        marker.ns = ns;
+        marker.id = id;
+        marker.type = visualization_msgs::Marker::LINE_LIST;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.x = line_width;
+        marker.scale.y = line_width;
+        marker.scale.z = line_width;
+        marker.color = color;
+        marker.lifetime = ros::Duration(0.2);
+
+        for (size_t j = 0; j + 1 < layer_size; ++j)
+        {
+                geometry_msgs::Point bottom_start;
+                bottom_start.x = points[j].x;
+                bottom_start.y = points[j].y;
+                bottom_start.z = points[j].z;
+                geometry_msgs::Point bottom_end;
+                bottom_end.x = points[j + 1].x;
+                bottom_end.y = points[j + 1].y;
+                bottom_end.z = points[j + 1].z;
+                geometry_msgs::Point top_start;
+                top_start.x = points[j + layer_size].x;
+                top_start.y = points[j + layer_size].y;
+                top_start.z = points[j + layer_size].z;
+                geometry_msgs::Point top_end;
+                top_end.x = points[j + layer_size + 1].x;
+                top_end.y = points[j + layer_size + 1].y;
+                top_end.z = points[j + layer_size + 1].z;
+
+                marker.points.push_back(bottom_start);
+                marker.points.push_back(bottom_end);
+                marker.points.push_back(top_start);
+                marker.points.push_back(top_end);
+                marker.points.push_back(bottom_start);
+                marker.points.push_back(top_start);
+        }
+
+        markers.markers.push_back(marker);
+        return true;
+}
+
+visualization_msgs::Marker makeDeleteAllMarker(const std_msgs::Header &header, const std::string &ns)
+{
+        visualization_msgs::Marker delete_marker;
+        delete_marker.header = header;
+        delete_marker.ns = ns;
+        delete_marker.pose.orientation.w = 1.0;
+        delete_marker.action = visualization_msgs::Marker::DELETEALL;
+        return delete_marker;
+}
+
 void publishClusterBoxes(const autoware_tracker::CloudClusterArray &in_clusters)
 {
         visualization_msgs::MarkerArray markers;
-        visualization_msgs::Marker delete_marker;
-        delete_marker.header = in_clusters.header;
-        delete_marker.ns = "lidar_cluster_boxes";
-        delete_marker.pose.orientation.w = 1.0;
-        delete_marker.scale.x = 0.08;
-        delete_marker.scale.y = 0.08;
-        delete_marker.scale.z = 0.08;
-        delete_marker.action = visualization_msgs::Marker::DELETEALL;
-        markers.markers.push_back(delete_marker);
+        markers.markers.push_back(makeDeleteAllMarker(in_clusters.header, "lidar_cluster_boxes"));
+
+        std_msgs::ColorRGBA color;
+        color.r = 1.0;
+        color.g = 0.75;
+        color.b = 0.05;
+        color.a = 0.85;
 
         for (size_t i = 0; i < in_clusters.clusters.size(); ++i)
         {
-                const auto &cluster = in_clusters.clusters[i];
-                const auto &points = cluster.convex_hull.polygon.points;
-                if (points.size() < 6 || points.size() % 2 != 0)
+                addConvexHullBoxMarker(markers, in_clusters.clusters[i].convex_hull, in_clusters.header,
+                                       "lidar_cluster_boxes", static_cast<int>(i), color, 0.08);
+        }
+
+        _pub_cluster_boxes_markers.publish(markers);
+}
+
+void publishImageAssociatedBoxes(const autoware_tracker::DetectedObjectArray &detected_objects)
+{
+        visualization_msgs::MarkerArray markers;
+        markers.markers.push_back(makeDeleteAllMarker(detected_objects.header, "image_associated_cluster_boxes"));
+        markers.markers.push_back(makeDeleteAllMarker(detected_objects.header, "image_associated_labels"));
+
+        std_msgs::ColorRGBA box_color;
+        box_color.r = 0.0;
+        box_color.g = 1.0;
+        box_color.b = 0.85;
+        box_color.a = 1.0;
+
+        int marker_id = 0;
+        for (const auto &object : detected_objects.objects)
+        {
+                if (object.label == no_camera_label || object.image_frame.empty())
                 {
                         continue;
                 }
 
-                const size_t layer_size = points.size() / 2;
-                visualization_msgs::Marker marker;
-                marker.header = in_clusters.header;
-                marker.ns = "lidar_cluster_boxes";
-                marker.id = static_cast<int>(i);
-                marker.type = visualization_msgs::Marker::LINE_LIST;
-                marker.action = visualization_msgs::Marker::ADD;
-                marker.pose.orientation.w = 1.0;
-                marker.scale.x = 0.08;
-                marker.scale.y = 0.08;
-                marker.scale.z = 0.08;
-                marker.color.r = 1.0;
-                marker.color.g = 0.75;
-                marker.color.b = 0.05;
-                marker.color.a = 0.85;
-                marker.lifetime = ros::Duration(0.2);
-
-                for (size_t j = 0; j + 1 < layer_size; ++j)
+                if (!addConvexHullBoxMarker(markers, object.convex_hull, detected_objects.header,
+                                            "image_associated_cluster_boxes", marker_id, box_color, 0.12))
                 {
-                        geometry_msgs::Point bottom_start;
-                        bottom_start.x = points[j].x;
-                        bottom_start.y = points[j].y;
-                        bottom_start.z = points[j].z;
-                        geometry_msgs::Point bottom_end;
-                        bottom_end.x = points[j + 1].x;
-                        bottom_end.y = points[j + 1].y;
-                        bottom_end.z = points[j + 1].z;
-                        geometry_msgs::Point top_start;
-                        top_start.x = points[j + layer_size].x;
-                        top_start.y = points[j + layer_size].y;
-                        top_start.z = points[j + layer_size].z;
-                        geometry_msgs::Point top_end;
-                        top_end.x = points[j + layer_size + 1].x;
-                        top_end.y = points[j + layer_size + 1].y;
-                        top_end.z = points[j + layer_size + 1].z;
-
-                        marker.points.push_back(bottom_start);
-                        marker.points.push_back(bottom_end);
-                        marker.points.push_back(top_start);
-                        marker.points.push_back(top_end);
-                        marker.points.push_back(bottom_start);
-                        marker.points.push_back(top_start);
+                        continue;
                 }
-                markers.markers.push_back(marker);
+
+                visualization_msgs::Marker label_marker;
+                label_marker.header = detected_objects.header;
+                label_marker.ns = "image_associated_labels";
+                label_marker.id = marker_id;
+                label_marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+                label_marker.action = visualization_msgs::Marker::ADD;
+                label_marker.pose = object.pose;
+                label_marker.pose.position.z += std::max(0.3, object.dimensions.z * 0.5 + 0.25);
+                label_marker.scale.z = 0.45;
+                label_marker.color = box_color;
+                label_marker.lifetime = ros::Duration(0.2);
+                label_marker.text = "img" + object.image_frame + " cls" + object.label;
+                markers.markers.push_back(label_marker);
+
+                marker_id++;
         }
 
-        _pub_cluster_boxes_markers.publish(markers);
+        _pub_image_associated_boxes_markers.publish(markers);
 }
 
 geometry_msgs::PolygonStamped transformPolygon(const geometry_msgs::PolygonStamped &in_polygon,
@@ -356,6 +421,7 @@ void publishDetectedObjects(const autoware_tracker::CloudClusterArray &in_cluste
         detected_objects.header = in_clusters.header;
         detected_objects.frame_out = count;
         std::cout <<"detected_objects.frame_out is " << detected_objects.frame_out << std::endl;
+        std::vector<float> detected_object_image_iou;
         for(size_t i = 0; i < in_clusters.clusters.size(); i++) {
                 // Size limitation is not reasonable, but it can increase fps.
                 double length = std::max(in_clusters.clusters[i].bounding_box.dimensions.x,in_clusters.clusters[i].bounding_box.dimensions.y);
@@ -421,22 +487,14 @@ void publishDetectedObjects(const autoware_tracker::CloudClusterArray &in_cluste
                 detected_object.convex_hull = in_clusters.clusters[i].convex_hull;
                 detected_object.valid = true;
                 float iou_max = 0;
-                int image_height,image_width;
-
-                // if (iskitti){
-                //         image_height = 375;
-                //         image_width = 1242;
-                // }else{
-                //         image_height = 1200;
-                //         image_width = 1920;
-                // }
-
-                image_height = 375;
-                image_width = 1242;
+                int matched_image_index = -1;
                 
-   
-                for(size_t j = 0; j < in_image_detections->detections.size(); j++) {//对于一帧中所有2d框
-                        if(in_image_detections->detections[j].results[0].score > 0.3) {//置信度>0.5
+
+	                for(size_t j = 0; j < in_image_detections->detections.size(); j++) {//对于一帧中所有2d框
+	                        if(in_image_detections->detections[j].results.empty()) {
+	                                continue;
+	                        }
+	                        if(in_image_detections->detections[j].results[0].score > 0.3) {//置信度>0.5
                                 int im_min_x = in_image_detections->detections[j].bbox.center.x - (in_image_detections->detections[j].bbox.size_x / 2);
                                 int im_min_y = in_image_detections->detections[j].bbox.center.y - (in_image_detections->detections[j].bbox.size_y / 2);
                                 int im_max_x = in_image_detections->detections[j].bbox.center.x + (in_image_detections->detections[j].bbox.size_x / 2);
@@ -464,6 +522,7 @@ void publishDetectedObjects(const autoware_tracker::CloudClusterArray &in_cluste
                                                         detected_object.label = std::to_string(in_image_detections->detections[j].results[0].id); // 0:car, 1:pedestrian, 2:cyclist
                                                         detected_object.score = in_image_detections->detections[j].results[0].score;
                                                         detected_object.image_frame = std::to_string(j); //
+                                                        matched_image_index = static_cast<int>(j);
                                                         // detected_objects.objects.push_back(detected_object);
                                
                                                 }
@@ -474,6 +533,7 @@ void publishDetectedObjects(const autoware_tracker::CloudClusterArray &in_cluste
 
                 
                 detected_objects.objects.push_back(detected_object);
+                detected_object_image_iou.push_back(matched_image_index >= 0 ? iou_max : 0.0f);
                 
         }
 
@@ -481,8 +541,8 @@ void publishDetectedObjects(const autoware_tracker::CloudClusterArray &in_cluste
                 float iou_max_ = 0;
                 for(size_t m = 0; m < detected_objects.objects.size(); m++) {
                         if(detected_objects.objects[m].image_frame == std::to_string(n)) {
-                                if(detected_objects.objects[m].score > iou_max_) {
-                                        iou_max_ = detected_objects.objects[m].score;
+                                if(detected_object_image_iou[m] > iou_max_) {
+                                        iou_max_ = detected_object_image_iou[m];
                                 }
                         }
                 }
@@ -490,19 +550,19 @@ void publishDetectedObjects(const autoware_tracker::CloudClusterArray &in_cluste
                 for(size_t k = 0; k < detected_objects.objects.size(); k++) {
        
                         if(detected_objects.objects[k].image_frame == std::to_string(n)) {
-                                if(detected_objects.objects[k].score < iou_max_) {
+                                if(detected_object_image_iou[k] < iou_max_) {
                                         
-                                        std::cout << "set to 9" << std::endl;
-                                        detected_objects.objects[k].label = "9";
+                                        detected_objects.objects[k].label = no_camera_label;
                                         detected_objects.objects[k].score = 1.;
                                 } else{
-                                  detected_objects.objects[k].score = iou_max_;
+                                  detected_objects.objects[k].score = in_image_detections->detections[n].results[0].score;
                                 }
                         }
                 }
         }
 
         _pub_detected_objects.publish(detected_objects);
+        publishImageAssociatedBoxes(detected_objects);
 }
 
 void publishDetectedObjectsWithoutCamera(const autoware_tracker::CloudClusterArray &in_clusters)
@@ -539,6 +599,7 @@ void publishDetectedObjectsWithoutCamera(const autoware_tracker::CloudClusterArr
         }
 
         _pub_detected_objects.publish(detected_objects);
+        publishImageAssociatedBoxes(detected_objects);
 }
 // yang21itsc
 
@@ -1263,6 +1324,7 @@ int main(int argc, char **argv)
         _pub_clusters_message = nh.advertise<autoware_tracker::CloudClusterArray>("autoware_tracker/cluster/cloud_clusters", 10);
         _pub_detected_objects = nh.advertise<autoware_tracker::DetectedObjectArray>("autoware_tracker/cluster/objects", 10);
         _pub_cluster_boxes_markers = nh.advertise<visualization_msgs::MarkerArray>("autoware_tracker/cluster/cluster_boxes", 10);
+        _pub_image_associated_boxes_markers = nh.advertise<visualization_msgs::MarkerArray>("autoware_tracker/cluster/image_associated_boxes", 10);
 
         std::string points_topic = "/points_raw";
         if (nh.getParam("autoware_tracker/cluster/points_node", points_topic)) {

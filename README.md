@@ -9,9 +9,8 @@ Continual learning addresses the challenge of acquiring and retaining knowledge 
 
 ## How to Build & Run
 
-We use the following implementations:
+The ros1 branch uses the following implementations:
 
-- **PointPillars** from [mmdetection3d v1.0.0rc6](https://github.com/open-mmlab/mmdetection3d/tree/v1.0.0rc6).
 - The powerful streaming learning classifier **AMF**, implemented by [river](https://github.com/online-ml/river).
 - **Patchwork++** to remove ground points ([repository](https://github.com/url-kaist/patchwork-plusplus)).
 - The pretrained **YOLOv8** as the image detector ([repository](https://github.com/ultralytics/ultralytics)).
@@ -29,17 +28,11 @@ We use the following implementations:
    catkin_make
    ```
 
-3. We provide two scripts to run the OCL3D method:
-   - Run OCL3D on the KITTI tracking dataset using PointNet features and PointPillars:
-     ```bash
-     ./run_kitti_pillars_pointnet.sh
-     ```
-
-   - Run OCL3D on the IUSL dataset using handcrafted features:
+3. Run OCL3D on the IUSL dataset using handcrafted LiDAR clustering features:
      ```bash
      ./run_iusl_hand.sh
      ```
-   - Before running the script, please carefully check the ROS workspace path for each package.
+   Before running the script, please carefully check the ROS workspace path for each package.
 ## Important Note:
 **Patchwork++ cannot be compiled with OCL3D in the same workspace. Please place them in two separate workspaces.**
 
@@ -56,5 +49,4 @@ We use the following implementations:
   publisher={Springer}
 }
 ```
-
 

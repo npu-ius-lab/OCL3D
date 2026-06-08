@@ -97,14 +97,6 @@ target_link_libraries(lidar_euclidean_cluster_detect ${OpenCV_LIBRARIES} ${catki
 
 
 
-add_executable(lidar_euclidean_cluster_detect_pillars
-    src/lidar_euclidean_cluster_detect/lidar_euclidean_cluster_detect_pillars.cpp
-    src/lidar_euclidean_cluster_detect/cluster.cpp
-    src/libkitti/kitti.cpp)
-add_dependencies(lidar_euclidean_cluster_detect_pillars ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(lidar_euclidean_cluster_detect_pillars ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
-
-
 add_executable(imm_ukf_pda
     src/lidar_imm_ukf_pda_track/imm_ukf_pda_main.cpp
     src/lidar_imm_ukf_pda_track/imm_ukf_pda.h
