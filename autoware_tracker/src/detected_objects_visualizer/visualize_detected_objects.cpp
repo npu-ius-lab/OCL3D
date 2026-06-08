@@ -384,7 +384,7 @@ visualization_msgs::MarkerArray VisualizeDetectedObjects::estimate_vis(const aut
 void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedObjectArray &in_objects)
 {       
         autoware_tracker::DetectedObjectArray person_objects = FilterPersonObjects(in_objects);
-        visualization_msgs::MarkerArray label_markers, arrow_markers, centroid_markers, polygon_hulls, bounding_boxes,bounding_boxes_esti,object_models;
+        visualization_msgs::MarkerArray label_markers, arrow_markers, centroid_markers, polygon_hulls, bounding_boxes,object_models;
 
         visualization_msgs::MarkerArray visualization_markers;
         
@@ -395,7 +395,6 @@ void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedOb
         centroid_markers = ObjectsToCentroids_forests(person_objects);
 
         bounding_boxes = ObjectsToBoxes_forests(person_objects);
-        bounding_boxes_esti = estimate_vis(person_objects);
 
         visualization_markers.markers.insert(visualization_markers.markers.end(),
                                              label_markers.markers.begin(), label_markers.markers.end());
@@ -403,8 +402,6 @@ void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedOb
                                              centroid_markers.markers.begin(), centroid_markers.markers.end());
         visualization_markers.markers.insert(visualization_markers.markers.end(),
                                              bounding_boxes.markers.begin(), bounding_boxes.markers.end());
-        visualization_markers.markers.insert(visualization_markers.markers.end(),
-                                             bounding_boxes_esti.markers.begin(), bounding_boxes_esti.markers.end());
         // std::cerr << "results: " <<visualization_markers << std::endl;
 
         publisher_markers_forests.publish(visualization_markers);
@@ -504,24 +501,9 @@ visualization_msgs::MarkerArray VisualizeDetectedObjects::ObjectsToBoxes_forests
                         box.action = visualization_msgs::Marker::ADD;
                         box.ns = "box_markers";
                         box.id = marker_id_++;
+                        box.scale = object.dimensions;
                         box.pose.position = object.pose.position;
-                        // box.scale = object.dimensions;
                         box.pose.orientation = object.pose.orientation;
-                        box.scale = estimate_size(object);
-                        
-                        
-                        
-                        tf::Quaternion q(object.pose.orientation.x,
-                                        object.pose.orientation.y,
-                                        object.pose.orientation.z,
-                                        object.pose.orientation.w);
-                        double roll, pitch, yaw;
-                        
-                        tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-                        double rot_z = estimate_rot_z(object,yaw);
-                        geometry_msgs::Quaternion quat = tf::createQuaternionMsgFromYaw(rot_z);
-
-                        box.pose.orientation = quat;
                         if (object.color.a == 0)
                         {
                                 box.color = box_color_;
