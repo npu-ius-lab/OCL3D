@@ -26,6 +26,11 @@ bool IsPersonObject(const autoware_tracker::DetectedObject &object)
         return object.label == "1";
 }
 
+bool IsForestDisplayObject(const autoware_tracker::DetectedObject &object)
+{
+        return object.label == "1" || object.label == "9";
+}
+
 autoware_tracker::DetectedObjectArray FilterPersonObjects(const autoware_tracker::DetectedObjectArray &in_objects)
 {
         autoware_tracker::DetectedObjectArray person_objects = in_objects;
@@ -38,6 +43,30 @@ autoware_tracker::DetectedObjectArray FilterPersonObjects(const autoware_tracker
                 }
         }
         return person_objects;
+}
+
+autoware_tracker::DetectedObjectArray FilterForestObjects(const autoware_tracker::DetectedObjectArray &in_objects)
+{
+        autoware_tracker::DetectedObjectArray forest_objects = in_objects;
+        forest_objects.objects.clear();
+        for (const auto &object : in_objects.objects)
+        {
+                if (IsForestDisplayObject(object))
+                {
+                        forest_objects.objects.push_back(object);
+                }
+        }
+        return forest_objects;
+}
+
+std_msgs::ColorRGBA UnknownForestColor(float alpha)
+{
+        std_msgs::ColorRGBA color;
+        color.r = 0.55f;
+        color.g = 0.55f;
+        color.b = 0.55f;
+        color.a = alpha;
+        return color;
 }
 }
 
@@ -368,7 +397,7 @@ visualization_msgs::MarkerArray VisualizeDetectedObjects::estimate_vis(const aut
 //yao
 void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedObjectArray &in_objects)
 {       
-        autoware_tracker::DetectedObjectArray person_objects = FilterPersonObjects(in_objects);
+        autoware_tracker::DetectedObjectArray forest_objects = FilterForestObjects(in_objects);
         visualization_msgs::MarkerArray label_markers, arrow_markers, centroid_markers, polygon_hulls, bounding_boxes,object_models;
 
         visualization_msgs::MarkerArray visualization_markers;
@@ -376,11 +405,11 @@ void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedOb
 
         marker_id_ = 0;
 
-        label_markers = ObjectsToLabels_forests(person_objects);
-        centroid_markers = ObjectsToCentroids_forests(person_objects);
+        label_markers = ObjectsToLabels_forests(forest_objects);
+        centroid_markers = ObjectsToCentroids_forests(forest_objects);
 
-        bounding_boxes = ObjectsToBoxes_forests(person_objects);
-        visualization_msgs::MarkerArray bounding_boxes_esti = estimate_vis(person_objects);
+        bounding_boxes = ObjectsToBoxes_forests(forest_objects);
+        visualization_msgs::MarkerArray bounding_boxes_esti = estimate_vis(forest_objects);
 
         visualization_markers.markers.insert(visualization_markers.markers.end(),
                                              label_markers.markers.begin(), label_markers.markers.end());
@@ -492,7 +521,11 @@ visualization_msgs::MarkerArray VisualizeDetectedObjects::ObjectsToBoxes_forests
                         box.scale = object.dimensions;
                         box.pose.position = object.pose.position;
                         box.pose.orientation = object.pose.orientation;
-                        if (object.color.a == 0)
+                        if (object.label == "9")
+                        {
+                                box.color = UnknownForestColor(0.35f);
+                        }
+                        else if (object.color.a == 0)
                         {
                                 box.color = box_color_;
                         }
@@ -831,7 +864,14 @@ VisualizeDetectedObjects::ObjectsToLabels_forests(const autoware_tracker::Detect
                         label_marker.scale.y = 0.5;
                         label_marker.scale.z = 0.5;
                         
-                        label_marker.color = label_color_forests;
+                        if (object.label == "9")
+                        {
+                                label_marker.color = UnknownForestColor(0.9f);
+                        }
+                        else
+                        {
+                                label_marker.color = label_color_forests;
+                        }
 
                         label_marker.id = marker_id_++;
 
