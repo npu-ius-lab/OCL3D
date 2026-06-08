@@ -238,29 +238,14 @@ double VisualizeDetectedObjects::convertRot_z2Rot_y(double rot_z){
 
 std::vector<geometry_msgs::Point> VisualizeDetectedObjects::getEightVertices(const autoware_tracker::DetectedObject &in_object, double rot_z, geometry_msgs::Pose pose) {
         std::vector<geometry_msgs::Point> vertices(8);
-        geometry_msgs::Vector3 dimensions = estimate_size(in_object);
-        // 提取尺寸信息
-        double l = dimensions.x;
-        double w = dimensions.y;
-        double h = dimensions.z;
-
-        geometry_msgs::Vector3 dimensions_cluster;
-        dimensions_cluster.x = std::max(in_object.dimensions.x, in_object.dimensions.y);
-        dimensions_cluster.y = std::min(in_object.dimensions.x, in_object.dimensions.y);  
-        
-
-        std::vector<double> center = {pose.position.x,pose.position.y,pose.position.z - 0.5 * h};
-        
-        
-
-        if (dimensions.x > dimensions_cluster.x){
-                center[0] = pose.position.x + 0.5 * (dimensions.x - dimensions_cluster.x) * cos(rot_z);
-                center[1] = pose.position.y + 0.5 * (dimensions.x - dimensions_cluster.x) * sin(rot_z);
-        }    
+        double l = in_object.dimensions.x;
+        double w = in_object.dimensions.y;
+        double h = in_object.dimensions.z;
+        std::vector<double> center = {pose.position.x, pose.position.y, pose.position.z};
         
         double x_corners[8] = {l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2};
         double y_corners[8] = {w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2};
-        double z_corners[8] = {0, 0, 0, 0, h, h, h, h};
+        double z_corners[8] = {-h / 2, -h / 2, -h / 2, -h / 2, h / 2, h / 2, h / 2, h / 2};
         // Stack the corners into a 3D matrix (3, 8) in object coordinate system.
 
         Eigen::MatrixXd corners_3d(3, 8);
@@ -395,6 +380,7 @@ void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedOb
         centroid_markers = ObjectsToCentroids_forests(person_objects);
 
         bounding_boxes = ObjectsToBoxes_forests(person_objects);
+        visualization_msgs::MarkerArray bounding_boxes_esti = estimate_vis(person_objects);
 
         visualization_markers.markers.insert(visualization_markers.markers.end(),
                                              label_markers.markers.begin(), label_markers.markers.end());
@@ -402,6 +388,8 @@ void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedOb
                                              centroid_markers.markers.begin(), centroid_markers.markers.end());
         visualization_markers.markers.insert(visualization_markers.markers.end(),
                                              bounding_boxes.markers.begin(), bounding_boxes.markers.end());
+        visualization_markers.markers.insert(visualization_markers.markers.end(),
+                                             bounding_boxes_esti.markers.begin(), bounding_boxes_esti.markers.end());
         // std::cerr << "results: " <<visualization_markers << std::endl;
 
         publisher_markers_forests.publish(visualization_markers);
