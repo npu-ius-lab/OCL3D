@@ -5,9 +5,9 @@ BAG_PATH="${BAG_PATH:-/media/ros/SSData/dataset/iusl/sensor_fusion_data/2023-04-
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_SETUP="${WORKSPACE_SETUP:-$(cd "$REPO_DIR/.." && pwd)/devel/setup.bash}"
 SAVE_DIR="${SAVE_DIR:-$HOME/ocl3d_imf_workdir/iusl_bag_2023_04_25_fastlio}"
-RVIZ="${RVIZ:-false}"
+RVIZ="${RVIZ:-true}"
 FAST_LIO_RVIZ="${FAST_LIO_RVIZ:-false}"
-RATE="${RATE:-0.5}"
+RATE="${RATE:-1.0}"
 
 if [[ ! -f "$BAG_PATH" ]]; then
   echo "Bag file not found: $BAG_PATH" >&2

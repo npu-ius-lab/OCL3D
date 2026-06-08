@@ -76,6 +76,14 @@ online_training_queue_size: 256
    roslaunch ~/ocl3d_ws/src/OCL3D/launch/efficient_online_learning_iusl_bag_fastlio.launch rviz:=true
    ```
 
+   The convenience script starts the same FAST-LIO pipeline and plays the bag:
+   ```bash
+   cd ~/ocl3d_ws/src/OCL3D
+   ./run_iusl_bag_hand_fastlio.sh
+   ```
+
+   This mode uses FAST-LIO as the LiDAR odometry estimator and sets the tracker reference frame to the global odometry frame (`camera_init`). Use it when RF labels and tracked boxes should be maintained in the world frame instead of the local LiDAR frame.
+
 Useful visualization topics include:
 
 ```text
