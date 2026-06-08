@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   autoware_tracker
+  pointnet_3d_box_stamped
   )
 
 include_directories(
@@ -51,5 +52,6 @@ endif()
 
 catkin_install_python(PROGRAMS
   scripts/IMF_iusl.py
+  scripts/collect_initial_samples.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   )

@@ -15,6 +15,7 @@ import time
 from rospy.rostime import Time
 import copy
 import os   
+import json
 from river import evaluate
 from river import forest
 from river import metrics
@@ -80,31 +81,6 @@ class ClassReservoirReplayBuffer:
         return {label: len(self.buffers[label]) for label in KNOWN_LABELS}
 
 
-class InitialWarmupBuffer:
-    def __init__(self, samples_per_class):
-        self.samples_per_class = max(0, int(samples_per_class))
-        self.samples = {label: [] for label in KNOWN_LABELS}
-
-    def add(self, x, y):
-        y = normalize_label(y)
-        buf = self.samples[y]
-        if len(buf) < self.samples_per_class:
-            buf.append((dict(x), y))
-
-    def ready(self):
-        if self.samples_per_class <= 0:
-            return True
-        return all(len(self.samples[label]) >= self.samples_per_class for label in KNOWN_LABELS)
-
-    def sizes(self):
-        return {label: len(self.samples[label]) for label in KNOWN_LABELS}
-
-    def iter_samples(self):
-        for label in KNOWN_LABELS:
-            for sample in self.samples[label]:
-                yield sample
-
-
 def isValidToken(token):
     if token and len(token) > 100:
         return True
@@ -161,36 +137,58 @@ def fallback_prediction(label):
     return normalize_label(label)
 
 
-def complete_initial_warmup(reason):
-    global warmup_done
-    if warmup_done:
+def load_initial_samples(sample_file):
+    if not sample_file:
+        return []
+
+    sample_file = os.path.expanduser(sample_file)
+    if not os.path.exists(sample_file):
+        rospy.logwarn("initial sample file does not exist: %s", sample_file)
+        return []
+
+    samples = []
+    with open(sample_file, 'r') as f:
+        for line_no, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+                label = normalize_label(row['label'])
+                features = row['features']
+                x = {str(i): float(value) for i, value in enumerate(features)}
+                samples.append((x, label))
+            except Exception as exc:
+                rospy.logwarn("skip bad initial sample %s:%d: %s", sample_file, line_no, exc)
+
+    return samples
+
+
+def train_initial_samples(sample_file, epochs):
+    samples = load_initial_samples(sample_file)
+    if not samples:
+        rospy.logwarn("online RF starts without offline initial samples")
         return
 
-    trained = 0
-    for x, y in warmup_buffer.iter_samples():
-        learn_with_replay(x, y)
-        trained += 1
+    epochs = max(1, int(epochs))
+    label_counts = {label: 0 for label in KNOWN_LABELS}
+    for _, label in samples:
+        label_counts[label] += 1
 
-    warmup_done = True
+    for _ in range(epochs):
+        for x, y in samples:
+            learn_with_replay(x, y)
+
     rospy.loginfo(
-        "online RF initial warmup done reason=%s samples=%s trained=%d current_samples=%d replay_samples=%d replay_buffer=%s",
-        reason,
-        warmup_buffer.sizes(),
-        trained,
+        "online RF pre-trained from offline samples file=%s samples=%d label_counts=%s epochs=%d current_samples=%d replay_samples=%d replay_buffer=%s",
+        os.path.expanduser(sample_file),
+        len(samples),
+        label_counts,
+        epochs,
         sample_count,
         replay_sample_count,
         replay_buffer.sizes(),
     )
-
-
-def should_finish_warmup():
-    if warmup_done:
-        return False
-    if warmup_buffer.ready():
-        return True
-    if warmup_max_callbacks > 0 and warmup_frame_count >= warmup_max_callbacks:
-        return True
-    return False
 
 
 
@@ -203,7 +201,6 @@ eval_dict['epoch'] = 0
 eval_dict['confusion_matrix'] = metrics.ConfusionMatrix()
 def features_callback(features_msg):
     global save_dir, fallback_label
-    global warmup_frame_count
 
     global eval_dict,evalkitti
     eval_dict['callback_cn'] += 1
@@ -216,14 +213,6 @@ def features_callback(features_msg):
             replay_sample_count,
             replay_buffer.sizes(),
         )
-        if not warmup_done:
-            rospy.loginfo(
-                "online RF initial warmup callback=%d samples=%s target_per_class=%d max_callbacks=%d",
-                eval_dict['callback_cn'],
-                warmup_buffer.sizes(),
-                warmup_samples_per_class,
-                warmup_max_callbacks,
-            )
     
     if eval_dict['callback_cn'] % 4722 == 0:
         eval_dict['epoch'] = eval_dict['callback_cn'] // 4722
@@ -246,8 +235,6 @@ def features_callback(features_msg):
     rf_msg_array.header = features_msg.header
     result = []
     if (features_msg.number_of_samples != 0 ):
-        if not warmup_done:
-            warmup_frame_count += 1
         for data in features_msg.fea_boxes:
             eval_dict['test_samples'] += 1 #统计测试次数
             x = {}
@@ -255,32 +242,26 @@ def features_callback(features_msg):
                 x[str(i)] = value
             label = normalize_label(data.label)
             res = {}
-            if not warmup_done:
-                warmup_buffer.add(x, label)
-                res['predict'] = label
-                res['conf'] = 1.0
-                eval_dict['confusion_matrix'].update(label, res['predict'])
-            else:
-                predict = model_train.predict_proba_one(x) #预测的结果
-                try:
-                    normalized_predict = {}
-                    for pred_label, score in predict.items():
-                        pred_label = normalize_label(pred_label)
-                        normalized_predict[pred_label] = normalized_predict.get(pred_label, 0.0) + score
-                    res['predict'] = max(normalized_predict, key=normalized_predict.get)
-                    predict = normalized_predict
-                    res['conf'] =  predict[res['predict']]
-                except:
-                    eval_dict['no_det'] += 1#统计未分类的次数
-                    res['predict'] = fallback_prediction(data.label)
-                    res['conf'] = 0.0
-                    rospy.logwarn_throttle(2.0, 'can not get predict may be empty, using fallback label %s', res['predict'])
+            predict = model_train.predict_proba_one(x) #预测的结果
+            try:
+                normalized_predict = {}
+                for pred_label, score in predict.items():
+                    pred_label = normalize_label(pred_label)
+                    normalized_predict[pred_label] = normalized_predict.get(pred_label, 0.0) + score
+                res['predict'] = max(normalized_predict, key=normalized_predict.get)
+                predict = normalized_predict
+                res['conf'] =  predict[res['predict']]
+            except:
+                eval_dict['no_det'] += 1#统计未分类的次数
+                res['predict'] = fallback_prediction(data.label)
+                res['conf'] = 0.0
+                rospy.logwarn_throttle(2.0, 'can not get predict may be empty, using fallback label %s', res['predict'])
 
-                if res['predict'] != label:
-                    eval_dict['wrong_det'] += 1
+            if res['predict'] != label:
+                eval_dict['wrong_det'] += 1
 
-                eval_dict['confusion_matrix'].update(label,res['predict'])
-                learn_with_replay(x, label)
+            eval_dict['confusion_matrix'].update(label,res['predict'])
+            learn_with_replay(x, label)
 
             res['pose'] = data.pose
             res['dimensions'] = data.dimensions
@@ -297,9 +278,6 @@ def features_callback(features_msg):
             rf_msg.dimensions = data.dimensions
             rf_msg.valid = True
             rf_msg_array.objects.append(rf_msg)
-        if should_finish_warmup():
-            reason = "balanced_samples" if warmup_buffer.ready() else "max_callbacks"
-            complete_initial_warmup(reason)
         rate = (eval_dict['test_samples'] - eval_dict['wrong_det'] - eval_dict['no_det']) / eval_dict['test_samples'] * 100
         if eval_dict['callback_cn'] % 30 == 1:
             rospy.loginfo(
@@ -332,10 +310,8 @@ save_dir = os.path.expanduser('~/ocl3d_imf_workdir')
 fallback_label = ''
 replay_buffer_size_per_class = 512
 replay_samples_per_class = 8
-warmup_samples_per_class = 30
-warmup_max_callbacks = 120
-warmup_frame_count = 0
-warmup_done = False
+initial_samples_file = ''
+initial_train_epochs = 1
 if __name__ == '__main__':
     seed(1)
     rospy.init_node("random_forest_node_online")
@@ -346,22 +322,19 @@ if __name__ == '__main__':
     fallback_label = optional_known_label(rospy.get_param('~fallback_label', fallback_label))
     replay_buffer_size_per_class = rospy.get_param('~replay_buffer_size_per_class', replay_buffer_size_per_class)
     replay_samples_per_class = rospy.get_param('~replay_samples_per_class', replay_samples_per_class)
-    warmup_samples_per_class = rospy.get_param('~warmup_samples_per_class', warmup_samples_per_class)
-    warmup_max_callbacks = rospy.get_param('~warmup_max_callbacks', warmup_max_callbacks)
+    initial_samples_file = rospy.get_param('~initial_samples_file', initial_samples_file)
+    initial_train_epochs = rospy.get_param('~initial_train_epochs', initial_train_epochs)
     os.makedirs(save_dir, exist_ok=True)
     replay_buffer = ClassReservoirReplayBuffer(replay_buffer_size_per_class, seed_value=1)
-    warmup_buffer = InitialWarmupBuffer(warmup_samples_per_class)
-    warmup_done = warmup_buffer.ready()
     rospy.loginfo(
-        "online random forest labels=[%s,%s] fallback=%s replay_buffer_size_per_class=%s replay_samples_per_class=%s warmup_samples_per_class=%s warmup_max_callbacks=%s warmup_done=%s",
+        "online random forest labels=[%s,%s] fallback=%s replay_buffer_size_per_class=%s replay_samples_per_class=%s initial_samples_file=%s initial_train_epochs=%s",
         PERSON_LABEL,
         UNKNOWN_LABEL,
         fallback_label or "upstream_label",
         replay_buffer_size_per_class,
         replay_samples_per_class,
-        warmup_samples_per_class,
-        warmup_max_callbacks,
-        warmup_done,
+        initial_samples_file,
+        initial_train_epochs,
     )
     model_train = forest.AMFClassifier(
         n_estimators=50,
@@ -377,6 +350,7 @@ if __name__ == '__main__':
     if load_weights and model_file_name:
         model_train = joblib.load(model_file_name)
 
+    train_initial_samples(initial_samples_file, initial_train_epochs)
 
     feature_sub = rospy.Subscriber("/point_cloud_features_global/features_global", PointNet3DBoxStampedArray, features_callback, queue_size=1, buff_size=2**20)
     rospy.loginfo('start online incremental learning')

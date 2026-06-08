@@ -11,8 +11,8 @@
   <arg name="person_unknown_only" default="true" />
   <arg name="replay_buffer_size_per_class" default="512" />
   <arg name="replay_samples_per_class" default="8" />
-  <arg name="warmup_samples_per_class" default="30" />
-  <arg name="warmup_max_callbacks" default="120" />
+  <arg name="initial_samples_file" default="$(find online_forests_ros)/data/initial_samples_iusl_bag_2023_04_25.jsonl" />
+  <arg name="initial_train_epochs" default="1" />
 
   <param name="/use_sim_time" type="bool" value="true" />
 
@@ -34,8 +34,8 @@
     <arg name="person_unknown_only" value="$(arg person_unknown_only)" />
     <arg name="replay_buffer_size_per_class" value="$(arg replay_buffer_size_per_class)" />
     <arg name="replay_samples_per_class" value="$(arg replay_samples_per_class)" />
-    <arg name="warmup_samples_per_class" value="$(arg warmup_samples_per_class)" />
-    <arg name="warmup_max_callbacks" value="$(arg warmup_max_callbacks)" />
+    <arg name="initial_samples_file" value="$(arg initial_samples_file)" />
+    <arg name="initial_train_epochs" value="$(arg initial_train_epochs)" />
     <arg name="tracking_frame" value="camera_init" />
   </include>
 </launch>

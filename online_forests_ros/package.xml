@@ -22,8 +22,10 @@
   <build_depend>libblas-dev</build_depend>
   <build_depend>liblapack-dev</build_depend>
   <build_depend>autoware_tracker</build_depend>
+  <build_depend>pointnet_3d_box_stamped</build_depend>
   <build_depend>std_msgs</build_depend>
   
   <exec_depend>autoware_tracker</exec_depend>
+  <exec_depend>pointnet_3d_box_stamped</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 </package>
