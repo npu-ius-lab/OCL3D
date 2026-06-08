@@ -16,7 +16,7 @@
   <arg name="tracking_frame" default="velodyne" />
   <arg name="person_unknown_only" default="true" />
   <arg name="replay_buffer_size_per_class" default="512" />
-  <arg name="replay_samples_per_class" default="8" />
+  <arg name="replay_samples_per_class" default="2" />
   <arg name="initial_samples_file" default="$(find online_forests_ros)/data/initial_samples_iusl_bag_2023_04_25.jsonl" />
   <arg name="initial_train_epochs" default="1" />
 
