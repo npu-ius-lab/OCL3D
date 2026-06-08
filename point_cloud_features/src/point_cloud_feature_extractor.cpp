@@ -35,6 +35,10 @@
 #include "point_cloud_features/point_cloud_features.h"
 #include "autoware_tracker/DetectedObjectArray.h"
 
+static std::string normalizeLabel(const std::string& label) {
+        return label == "1" ? "1" : "9";
+}
+
 int main(int argc, char **argv) {
         int minimum_points; // The minimum points that a cluster should contain, e.g. 3 for PCA.
         bool number_of_points, min_distance, covariance_mat3D, normalized_MOIT, slice_feature, intensity_distribution;
@@ -74,8 +78,6 @@ int main(int argc, char **argv) {
 
                 for(int i = 0; i < objects_msg->objects.size(); i++) {
                         if(objects_msg->objects[i].pointcloud.data.size()/32 >= minimum_points) {
-                                if(objects_msg->objects[i].label.compare("unknown") == 0) continue;
-
                                 // downsampling for training
              
                                 
@@ -112,9 +114,8 @@ int main(int argc, char **argv) {
                                 }
 
                  
-                                // features_msg.data += objects_msg->objects[i].label + std::to_string(objects_msg->objects[i].id); // 0:car, 1:pedestrian, 2:cyclist !!!!!!!!
-                                if (objects_msg->objects[i].label != "9"){
-                                features_msg.data += objects_msg->objects[i].label ;
+                                std::string label = normalizeLabel(objects_msg->objects[i].label);
+                                features_msg.data += label ;
                                 for(int j = 0; j < features_dig.size(); j++) {
                                         features_msg.data += " " + std::to_string(j+1) + ":" + std::to_string(features_dig[j]);
                                 }
@@ -122,20 +123,17 @@ int main(int argc, char **argv) {
 
                                 features_msg.data += "\n";
 
-                                if(objects_msg->objects[i].label.compare("0") == 0) {
+                                if(label.compare("9") == 0) {
                                         number_of_car_count++;
-                                } else if (objects_msg->objects[i].label.compare("1") == 0) {
+                                } else if (label.compare("1") == 0) {
                                         number_of_ped_count++;
-                                } else if (objects_msg->objects[i].label.compare("2") == 0) {
-                                        number_of_cyc_count++;
                                 }
                                 number_of_samples_count++;
                                 number_of_samples++;
-                                }
                         }
                 }
 
-                features_msg.data.insert(0, std::to_string(number_of_samples) + " " + std::to_string(features_dig.size()) + " 3 1\n"); // Samples + Features + Classes + FeatureMinIndex
+                features_msg.data.insert(0, std::to_string(number_of_samples) + " " + std::to_string(features_dig.size()) + " 2 1\n"); // Samples + Features + Classes + FeatureMinIndex
                 if(number_of_samples > 0) {
                         features_pub.publish(features_msg);
                 }

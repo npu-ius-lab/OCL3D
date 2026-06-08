@@ -40,6 +40,9 @@
 static ros::Subscriber object_sub;
 static ros::Publisher features_pub;
 
+static std::string normalizeLabel(const std::string& label) {
+        return label == "1" ? "1" : "9";
+}
 
 void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg){
 
@@ -93,9 +96,10 @@ void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg
 
 
 
-                                if (objects_msg->objects[i].label != "9"){
+                                {
                                         pointnet_3d_box_stamped::PointNet3DBoxStamped features_msg;
-                                        features_msg.label = objects_msg->objects[i].label;
+                                        std::string label = normalizeLabel(objects_msg->objects[i].label);
+                                        features_msg.label = label;
                                         features_msg.id = objects_msg->objects[i].id;
                                         features_msg.pose = objects_msg->objects[i].pose;
                                         features_msg.header = objects_msg->objects[i].header;
@@ -109,12 +113,10 @@ void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg
                                         }
 
 
-                                        if(objects_msg->objects[i].label.compare("0") == 0) {
+                                        if(label.compare("9") == 0) {
                                                 number_of_car_count++;
-                                        } else if (objects_msg->objects[i].label.compare("1") == 0) {
+                                        } else if (label.compare("1") == 0) {
                                                 number_of_ped_count++;
-                                        } else if (objects_msg->objects[i].label.compare("2") == 0) {
-                                                number_of_cyc_count++;
                                         }
                                         number_of_samples_count++;
                                         number_of_samples++;
@@ -128,7 +130,7 @@ void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg
 
                 features_msg_array.number_of_samples = number_of_samples;
                 features_msg_array.fea_dimensions = features_dig.size();
-                features_msg_array.Classes = 3;
+                features_msg_array.Classes = 2;
                 features_msg_array.FeatureMinIndex = 1;
                 
                 features_msg_array.frame_out =  objects_msg->frame_out;
@@ -144,4 +146,3 @@ int main(int argc, char **argv) {
         object_sub = private_nh.subscribe("/autoware_tracker/cluster/objects_Predict", 100, Callback);
         ros::spin();
 }
-

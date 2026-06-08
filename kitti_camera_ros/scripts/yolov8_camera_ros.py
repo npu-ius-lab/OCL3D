@@ -16,6 +16,7 @@ COCO_CAR_CLASSES = {2, 5, 7}  # car, bus, truck
 OCL3D_CAR = 0
 OCL3D_PEDESTRIAN = 1
 OCL3D_CYCLIST = 2
+OCL3D_UNKNOWN = 9
 
 
 def box_iou(a, b):
@@ -75,6 +76,7 @@ class YoloV8CameraRos:
         self.nms_iou = float(rospy.get_param("~iou", 0.45))
         self.cyclist_iou = float(rospy.get_param("~cyclist_iou", 0.4))
         self.device = rospy.get_param("~device", "")
+        self.person_unknown_only = bool(rospy.get_param("~person_unknown_only", True))
         self.publish_person_when_cyclist = bool(rospy.get_param("~publish_person_when_cyclist", False))
         self.visualize = bool(rospy.get_param("~visualize", True))
 
@@ -85,13 +87,14 @@ class YoloV8CameraRos:
         self.image_sub = rospy.Subscriber(self.image_topic, CompressedImage, self.image_callback, queue_size=1, buff_size=2**24)
 
         rospy.loginfo(
-            "[yolov8_camera_ros] model=%s image_topic=%s conf=%.2f iou=%.2f cyclist_iou=%.2f device=%s",
+            "[yolov8_camera_ros] model=%s image_topic=%s conf=%.2f iou=%.2f cyclist_iou=%.2f device=%s person_unknown_only=%s",
             self.model_path,
             self.image_topic,
             self.confidence,
             self.nms_iou,
             self.cyclist_iou,
             self.device if self.device else "auto",
+            self.person_unknown_only,
         )
 
     def image_callback(self, msg):
@@ -99,11 +102,12 @@ class YoloV8CameraRos:
         if frame is None:
             return
 
+        classes = [COCO_PERSON] if self.person_unknown_only else [COCO_PERSON, COCO_BICYCLE, 2, 5, 7]
         kwargs = {
             "conf": self.confidence,
             "iou": self.nms_iou,
             "verbose": False,
-            "classes": [COCO_PERSON, COCO_BICYCLE, 2, 5, 7],
+            "classes": classes,
         }
         if self.device:
             kwargs["device"] = self.device
@@ -145,7 +149,10 @@ class YoloV8CameraRos:
 
         for box, cls_id, score in zip(xyxy, cls, conf):
             item = (tuple(float(v) for v in box), float(score))
-            if cls_id in COCO_CAR_CLASSES:
+            if self.person_unknown_only:
+                if cls_id == COCO_PERSON:
+                    persons.append(item)
+            elif cls_id in COCO_CAR_CLASSES:
                 cars.append(item)
             elif cls_id == COCO_PERSON:
                 persons.append(item)
@@ -157,31 +164,32 @@ class YoloV8CameraRos:
         used_persons = set()
         used_bicycles = set()
 
-        for person_idx, (person_box, person_score) in enumerate(persons):
-            best_bicycle_idx = None
-            best_iou = -math.inf
-            for bicycle_idx, (bicycle_box, _) in enumerate(bicycles):
-                if bicycle_idx in used_bicycles:
+        if not self.person_unknown_only:
+            for person_idx, (person_box, person_score) in enumerate(persons):
+                best_bicycle_idx = None
+                best_iou = -math.inf
+                for bicycle_idx, (bicycle_box, _) in enumerate(bicycles):
+                    if bicycle_idx in used_bicycles:
+                        continue
+                    iou = box_iou(person_box, bicycle_box)
+                    if iou >= self.cyclist_iou and iou > best_iou:
+                        best_iou = iou
+                        best_bicycle_idx = bicycle_idx
+
+                if best_bicycle_idx is None:
                     continue
-                iou = box_iou(person_box, bicycle_box)
-                if iou >= self.cyclist_iou and iou > best_iou:
-                    best_iou = iou
-                    best_bicycle_idx = bicycle_idx
 
-            if best_bicycle_idx is None:
-                continue
+                bicycle_box, bicycle_score = bicycles[best_bicycle_idx]
+                cyclist_box = union_box(person_box, bicycle_box)
+                cyclist_score = min(person_score, bicycle_score)
+                detections.append(make_detection(cyclist_box, OCL3D_CYCLIST, cyclist_score))
+                draw_items.append((cyclist_box, "Cyclist", cyclist_score, (255, 0, 0)))
+                used_persons.add(person_idx)
+                used_bicycles.add(best_bicycle_idx)
 
-            bicycle_box, bicycle_score = bicycles[best_bicycle_idx]
-            cyclist_box = union_box(person_box, bicycle_box)
-            cyclist_score = min(person_score, bicycle_score)
-            detections.append(make_detection(cyclist_box, OCL3D_CYCLIST, cyclist_score))
-            draw_items.append((cyclist_box, "Cyclist", cyclist_score, (255, 0, 0)))
-            used_persons.add(person_idx)
-            used_bicycles.add(best_bicycle_idx)
-
-        for box, score in cars:
-            detections.append(make_detection(box, OCL3D_CAR, score))
-            draw_items.append((box, "Car", score, (0, 0, 255)))
+            for box, score in cars:
+                detections.append(make_detection(box, OCL3D_CAR, score))
+                draw_items.append((box, "Car", score, (0, 0, 255)))
 
         for person_idx, (box, score) in enumerate(persons):
             if person_idx in used_persons and not self.publish_person_when_cyclist:

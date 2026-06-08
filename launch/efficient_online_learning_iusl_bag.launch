@@ -14,6 +14,9 @@
   <arg name="cyclist_iou" default="0.4" />
   <arg name="yolo_device" default="" />
   <arg name="tracking_frame" default="velodyne" />
+  <arg name="person_unknown_only" default="true" />
+  <arg name="replay_buffer_size_per_class" default="512" />
+  <arg name="replay_samples_per_class" default="8" />
 
   <rosparam file="$(find autoware_tracker)/config/params_iusl_bag_2023_04_25.yaml" command="load" subst_value="true" />
   <param name="autoware_tracker/cluster/use_camera" type="bool" value="$(arg use_camera)" />
@@ -26,6 +29,7 @@
     <param name="iou" type="double" value="$(arg yolo_iou)" />
     <param name="cyclist_iou" type="double" value="$(arg cyclist_iou)" />
     <param name="device" type="string" value="$(arg yolo_device)" />
+    <param name="person_unknown_only" type="bool" value="$(arg person_unknown_only)" />
   </node>
 
   <node pkg="autoware_tracker" type="lidar_euclidean_cluster_detect" name="lidar_euclidean_cluster_detect" output="screen" />
@@ -55,6 +59,8 @@
     <arg name="load_weights" value="$(arg load_weights)"/>
     <arg name="model_file_name" value="$(arg model_file_name)"/>
     <arg name="fallback_label" value="$(arg fallback_label)"/>
+    <arg name="replay_buffer_size_per_class" value="$(arg replay_buffer_size_per_class)"/>
+    <arg name="replay_samples_per_class" value="$(arg replay_samples_per_class)"/>
   </include>
 
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(find autoware_tracker)/../launch/efficient_online_learning.rviz" />

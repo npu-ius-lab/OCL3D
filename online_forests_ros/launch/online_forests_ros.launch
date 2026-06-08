@@ -7,6 +7,8 @@
   <arg name="load_weights" default="false" />
   <arg name="model_file_name" default="" />
   <arg name="fallback_label" default="" />
+  <arg name="replay_buffer_size_per_class" default="512" />
+  <arg name="replay_samples_per_class" default="8" />
   <node pkg="online_forests_ros" type="IMF_iusl.py" name="random_forest_node_online" output="screen" respawn="false">
     <param name="scence" type="string" value="$(arg scence)"/>
     <param name="noise" type="string" value="$(arg noise)"/>
@@ -15,5 +17,7 @@
     <param name="load_weights" type="bool" value="$(arg load_weights)"/>
     <param name="model_file_name" type="string" value="$(arg model_file_name)"/>
     <param name="fallback_label" type="string" value="$(arg fallback_label)"/>
+    <param name="replay_buffer_size_per_class" type="int" value="$(arg replay_buffer_size_per_class)"/>
+    <param name="replay_samples_per_class" type="int" value="$(arg replay_samples_per_class)"/>
   </node>
 </launch> 

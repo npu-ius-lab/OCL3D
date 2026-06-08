@@ -11,7 +11,6 @@ from autoware_tracker.msg import DetectedObjectArray,DetectedObject
 from pointnet_3d_box_stamped.msg import PointNet3DBoxStampedArray,PointNet3DBoxStamped
 import random
 import matplotlib.pyplot as plt
-import threading
 import time
 from rospy.rostime import Time
 import copy
@@ -24,6 +23,56 @@ from river import metrics
 
 import sys
 sys.setrecursionlimit(1000000)
+
+PERSON_LABEL = "1"
+UNKNOWN_LABEL = "9"
+KNOWN_LABELS = (PERSON_LABEL, UNKNOWN_LABEL)
+
+
+def normalize_label(label):
+    return PERSON_LABEL if str(label) == PERSON_LABEL else UNKNOWN_LABEL
+
+
+class ClassReservoirReplayBuffer:
+    def __init__(self, capacity_per_class, seed_value=1):
+        self.capacity_per_class = max(0, int(capacity_per_class))
+        self.buffers = {label: [] for label in KNOWN_LABELS}
+        self.seen = {label: 0 for label in KNOWN_LABELS}
+        self.rng = random.Random(seed_value)
+
+    def add(self, x, y):
+        y = normalize_label(y)
+        if self.capacity_per_class <= 0:
+            return
+
+        self.seen[y] += 1
+        sample = (dict(x), y)
+        buf = self.buffers[y]
+        if len(buf) < self.capacity_per_class:
+            buf.append(sample)
+            return
+
+        replace_idx = self.rng.randrange(self.seen[y])
+        if replace_idx < self.capacity_per_class:
+            buf[replace_idx] = sample
+
+    def sample(self, samples_per_class):
+        samples_per_class = max(0, int(samples_per_class))
+        if samples_per_class <= 0:
+            return []
+
+        replay = []
+        for label in KNOWN_LABELS:
+            buf = self.buffers[label]
+            if not buf:
+                continue
+            k = min(samples_per_class, len(buf))
+            replay.extend(self.rng.sample(buf, k))
+        self.rng.shuffle(replay)
+        return replay
+
+    def sizes(self):
+        return {label: len(self.buffers[label]) for label in KNOWN_LABELS}
 
 
 def isValidToken(token):
@@ -60,23 +109,20 @@ def loadmsg(msg):
 
 
 sample_count = 0
-def do_train_task():
-    global sample_count
-    while not rospy.is_shutdown():
-        print('*'*15,'online incremental training starting','*'*15)
-        try:
-            point_feature = rospy.wait_for_message('/point_cloud_features/features', String)
-        except rospy.exceptions.ROSInterruptException:
-            break
-        start = time.time()
-        if point_feature.data:
-            samples = loadmsg(point_feature)
-            for sample in samples:
-                model_train.learn_one(sample['feature'],sample['label'])
-                sample_count += 1
-        end = time.time()
-  
-        print(f'learned {sample_count} samples')
+replay_sample_count = 0
+
+
+def learn_with_replay(x, y):
+    global sample_count, replay_sample_count
+
+    y = normalize_label(y)
+    model_train.learn_one(x, y)
+    sample_count += 1
+    replay_buffer.add(x, y)
+
+    for replay_x, replay_y in replay_buffer.sample(replay_samples_per_class):
+        model_train.learn_one(replay_x, replay_y)
+        replay_sample_count += 1
 
 
 
@@ -122,21 +168,28 @@ def features_callback(features_msg):
             x = {}
             for i, value in enumerate(data.features):
                 x[str(i)] = value
+            label = normalize_label(data.label)
             res = {}
             predict = model_train.predict_proba_one(x) #预测的结果
             try:
-                res['predict'] = max(predict, key=predict.get)
+                normalized_predict = {}
+                for pred_label, score in predict.items():
+                    pred_label = normalize_label(pred_label)
+                    normalized_predict[pred_label] = normalized_predict.get(pred_label, 0.0) + score
+                res['predict'] = max(normalized_predict, key=normalized_predict.get)
+                predict = normalized_predict
                 res['conf'] =  predict[res['predict']]
             except:
                 eval_dict['no_det'] += 1#统计未分类的次数
-                res['predict'] = fallback_label or data.label
+                res['predict'] = normalize_label(fallback_label or data.label)
                 res['conf'] = 0.0
                 print('can not get predict may be empty, using fallback label', res['predict'])
 
-            if res['predict'] != data.label:
+            if res['predict'] != label:
                 eval_dict['wrong_det'] += 1
             
-            eval_dict['confusion_matrix'].update(data.label,res['predict'])
+            eval_dict['confusion_matrix'].update(label,res['predict'])
+            learn_with_replay(x, label)
 
             res['pose'] = data.pose
             res['dimensions'] = data.dimensions
@@ -156,6 +209,7 @@ def features_callback(features_msg):
             rf_msg_array.objects.append(rf_msg)
         rate = (eval_dict['test_samples'] - eval_dict['wrong_det'] - eval_dict['no_det']) / eval_dict['test_samples'] * 100
         print(f'total rate is {rate}% with test ',eval_dict['test_samples'], 'samples,wrong det ',eval_dict['wrong_det'], 'samples,no det', eval_dict['no_det'],'samples')
+        print('learned current samples', sample_count, 'replay samples', replay_sample_count, 'buffer sizes', replay_buffer.sizes())
         
 
 
@@ -176,6 +230,8 @@ evalkitti = True
 
 save_dir = os.path.expanduser('~/ocl3d_imf_workdir')
 fallback_label = ''
+replay_buffer_size_per_class = 512
+replay_samples_per_class = 8
 if __name__ == '__main__':
     seed(1)
     rospy.init_node("random_forest_node_online")
@@ -183,8 +239,19 @@ if __name__ == '__main__':
     noise = rospy.get_param('/random_forest_node_online/noise')
     kitti = rospy.get_param('/random_forest_node_online/kitti')
     save_dir = os.path.expanduser(rospy.get_param('~save_dir', save_dir))
-    fallback_label = rospy.get_param('~fallback_label', fallback_label)
+    fallback_label = normalize_label(rospy.get_param('~fallback_label', fallback_label))
+    replay_buffer_size_per_class = rospy.get_param('~replay_buffer_size_per_class', replay_buffer_size_per_class)
+    replay_samples_per_class = rospy.get_param('~replay_samples_per_class', replay_samples_per_class)
     os.makedirs(save_dir, exist_ok=True)
+    replay_buffer = ClassReservoirReplayBuffer(replay_buffer_size_per_class, seed_value=1)
+    rospy.loginfo(
+        "online random forest labels=[%s,%s] fallback=%s replay_buffer_size_per_class=%s replay_samples_per_class=%s",
+        PERSON_LABEL,
+        UNKNOWN_LABEL,
+        fallback_label,
+        replay_buffer_size_per_class,
+        replay_samples_per_class,
+    )
     model_train = forest.AMFClassifier(
         n_estimators=50,
         use_aggregation=True,
@@ -202,8 +269,4 @@ if __name__ == '__main__':
 
     feature_sub = rospy.Subscriber("/point_cloud_features_global/features_global", PointNet3DBoxStampedArray, features_callback,queue_size=100)
     print('*'*15,'start online incremental learning','*'*15)
-    try:
-        train_thread = threading.Thread(target=do_train_task)
-        train_thread.start()
-    except:
-        print ("Error: can't start thread")
+    rospy.spin()
