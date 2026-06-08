@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<package>
+  <name>ocl3d_fast_lio_config</name>
+  <version>0.0.1</version>
+  <description>OCL3D FAST-LIO configuration for IUSL bag playback.</description>
+  <maintainer email="dev@example.com">OCL3D Maintainer</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

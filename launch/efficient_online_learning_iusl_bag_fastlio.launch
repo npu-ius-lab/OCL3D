@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="rviz" default="false" />
+  <arg name="fast_lio_rviz" default="false" />
+  <arg name="save_dir" default="$(env HOME)/ocl3d_imf_workdir/iusl_bag_2023_04_25_fastlio" />
+  <arg name="load_weights" default="false" />
+  <arg name="model_file_name" default="" />
+  <arg name="fallback_label" default="9" />
+  <arg name="use_yolo" default="true" />
+  <arg name="use_camera" default="true" />
+
+  <param name="/use_sim_time" type="bool" value="true" />
+
+  <include file="$(find ocl3d_fast_lio_config)/../launch/fast_lio_iusl_bag.launch">
+    <arg name="rviz" value="$(arg fast_lio_rviz)" />
+  </include>
+
+  <node pkg="tf" type="static_transform_publisher" name="body_to_velodyne_tf"
+        args="0 0 0 0 0 0 body velodyne 100" />
+
+  <include file="$(find ocl3d_fast_lio_config)/../launch/efficient_online_learning_iusl_bag.launch">
+    <arg name="rviz" value="$(arg rviz)" />
+    <arg name="save_dir" value="$(arg save_dir)" />
+    <arg name="load_weights" value="$(arg load_weights)" />
+    <arg name="model_file_name" value="$(arg model_file_name)" />
+    <arg name="fallback_label" value="$(arg fallback_label)" />
+    <arg name="use_yolo" value="$(arg use_yolo)" />
+    <arg name="use_camera" value="$(arg use_camera)" />
+    <arg name="tracking_frame" value="camera_init" />
+  </include>
+</launch>

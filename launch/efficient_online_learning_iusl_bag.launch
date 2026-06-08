@@ -13,9 +13,11 @@
   <arg name="yolo_iou" default="0.45" />
   <arg name="cyclist_iou" default="0.4" />
   <arg name="yolo_device" default="" />
+  <arg name="tracking_frame" default="velodyne" />
 
   <rosparam file="$(find autoware_tracker)/config/params_iusl_bag_2023_04_25.yaml" command="load" subst_value="true" />
   <param name="autoware_tracker/cluster/use_camera" type="bool" value="$(arg use_camera)" />
+  <param name="autoware_tracker/tracker/tracking_frame" type="string" value="$(arg tracking_frame)" />
 
   <node if="$(arg use_yolo)" pkg="kitti_camera_ros" type="yolov8_camera_ros" name="yolov8_camera_ros" output="screen">
     <param name="image_topic" type="string" value="$(arg yolo_image_topic)" />

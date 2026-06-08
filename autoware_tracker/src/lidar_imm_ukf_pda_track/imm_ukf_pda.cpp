@@ -259,16 +259,24 @@ bool ImmUkfPda::updateNecessaryTransform()
         bool success = true;
         try
         {
-                // tf_listener_.waitForTransform(input_header_.frame_id, tracking_frame_, ros::Time(0), ros::Duration(1.0));
-                // tf_listener_.lookupTransform(tracking_frame_, input_header_.frame_id, ros::Time(0), local2global_);
-
-                tf_listener_.waitForTransform("base_link", "base_link", ros::Time(0), ros::Duration(1.0));
-                tf_listener_.lookupTransform("base_link", "base_link", ros::Time(0), local2global_);
+                if (tracking_frame_ == input_header_.frame_id)
+                {
+                        tf::Transform identity;
+                        identity.setIdentity();
+                        local2global_.setData(identity);
+                        local2global_.frame_id_ = tracking_frame_;
+                        local2global_.child_frame_id_ = input_header_.frame_id;
+                        local2global_.stamp_ = input_header_.stamp;
+                }
+                else
+                {
+                        tf_listener_.waitForTransform(tracking_frame_, input_header_.frame_id, ros::Time(0), ros::Duration(1.0));
+                        tf_listener_.lookupTransform(tracking_frame_, input_header_.frame_id, ros::Time(0), local2global_);
+                }
         }
         catch (tf::TransformException ex)
         {
                 ROS_ERROR("%s", ex.what());
-                std::cout << "Tixiao" << std::endl;
                 success = false;
         }
         if (use_vectormap_ && has_subscribed_vectormap_)
