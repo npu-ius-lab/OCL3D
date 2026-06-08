@@ -3,9 +3,17 @@
   <arg name="scence" default="0000" />
   <arg name="noise" default="0000" />
   <arg name="kitti" default="true" />
+  <arg name="save_dir" default="$(env HOME)/ocl3d_imf_workdir" />
+  <arg name="load_weights" default="false" />
+  <arg name="model_file_name" default="" />
+  <arg name="fallback_label" default="" />
   <node pkg="online_forests_ros" type="IMF_iusl.py" name="random_forest_node_online" output="screen" respawn="false">
     <param name="scence" type="string" value="$(arg scence)"/>
     <param name="noise" type="string" value="$(arg noise)"/>
     <param name="kitti" type="bool" value="$(arg kitti)"/>
+    <param name="save_dir" type="string" value="$(arg save_dir)"/>
+    <param name="load_weights" type="bool" value="$(arg load_weights)"/>
+    <param name="model_file_name" type="string" value="$(arg model_file_name)"/>
+    <param name="fallback_label" type="string" value="$(arg fallback_label)"/>
   </node>
 </launch> 

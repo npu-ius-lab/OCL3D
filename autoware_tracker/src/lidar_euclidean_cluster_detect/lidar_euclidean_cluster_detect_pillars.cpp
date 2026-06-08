@@ -29,8 +29,8 @@
 
 #include <pcl/kdtree/kdtree.h>
 
-#include <pcl-1.8/pcl/sample_consensus/method_types.h>
-#include <pcl-1.8/pcl/sample_consensus/model_types.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
 
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
@@ -58,11 +58,11 @@
 
 #include <tf/tf.h>
 
-#include <opencv/cv.h>
-#include <opencv/highgui.h>
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/core/version.hpp>
 #include <chrono>
-#if (CV_MAJOR_VERSION == 3)
+#if (CV_MAJOR_VERSION >= 3)
 #include "gencolors.cpp"
 #else
 #include <opencv2/contrib/contrib.hpp>
@@ -1420,7 +1420,7 @@ int main(int argc, char **argv)
         _transform_listener = &listener;
 
         ROS_INFO("[%s] generating colors ...", __APP_NAME__);
-                                      #if (CV_MAJOR_VERSION == 3)
+                                      #if (CV_MAJOR_VERSION >= 3)
         generateColors(_colors, 255);
                                       #else
         cv::generateColors(_colors, 255);

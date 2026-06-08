@@ -27,8 +27,8 @@
 
 #include <pcl/kdtree/kdtree.h>
 
-#include <pcl-1.8/pcl/sample_consensus/method_types.h>
-#include <pcl-1.8/pcl/sample_consensus/model_types.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
 
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
@@ -55,11 +55,11 @@
 
 #include <tf/tf.h>
 
-#include <opencv/cv.h>
-#include <opencv/highgui.h>
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/core/version.hpp>
 
-#if (CV_MAJOR_VERSION == 3)
+#if (CV_MAJOR_VERSION >= 3)
 #include "gencolors.cpp"
 #else
 #include <opencv2/contrib/contrib.hpp>
@@ -114,6 +114,7 @@ static bool _remove_ground;  // only ground
 
 bool use_callback = true;
 bool use_camera = true;
+std::string no_camera_label = "9";
 
 static bool _use_diffnormals;
 
@@ -374,6 +375,42 @@ void publishDetectedObjects(const autoware_tracker::CloudClusterArray &in_cluste
 
         _pub_detected_objects.publish(detected_objects);
 }
+
+void publishDetectedObjectsWithoutCamera(const autoware_tracker::CloudClusterArray &in_clusters)
+{
+        autoware_tracker::DetectedObjectArray detected_objects;
+        detected_objects.header = in_clusters.header;
+        detected_objects.frame_out = count;
+
+        for(size_t i = 0; i < in_clusters.clusters.size(); i++) {
+                double length = std::max(in_clusters.clusters[i].bounding_box.dimensions.x,
+                                         in_clusters.clusters[i].bounding_box.dimensions.y);
+                double width = std::min(in_clusters.clusters[i].bounding_box.dimensions.x,
+                                        in_clusters.clusters[i].bounding_box.dimensions.y);
+                double height = in_clusters.clusters[i].bounding_box.dimensions.z;
+                if(length < 0.1
+                || length > 5.0
+                || width < 0.1
+                || width > 2.5
+                || height < 0.8
+                || height > 2.0
+                || length * width * height > 15) continue;
+
+                autoware_tracker::DetectedObject detected_object;
+                detected_object.header = in_clusters.header;
+                detected_object.label = no_camera_label;
+                detected_object.score = 1.;
+                detected_object.space_frame = in_clusters.header.frame_id;
+                detected_object.pose = in_clusters.clusters[i].bounding_box.pose;
+                detected_object.dimensions = in_clusters.clusters[i].dimensions;
+                detected_object.pointcloud = in_clusters.clusters[i].cloud;
+                detected_object.convex_hull = in_clusters.clusters[i].convex_hull;
+                detected_object.valid = true;
+                detected_objects.objects.push_back(detected_object);
+        }
+
+        _pub_detected_objects.publish(detected_objects);
+}
 // yang21itsc
 
 void publishCloudClusters(const ros::Publisher *in_publisher, const autoware_tracker::CloudClusterArray &in_clusters,
@@ -426,11 +463,19 @@ void publishCloudClusters(const ros::Publisher *in_publisher, const autoware_tra
                         }
                 }
                 in_publisher->publish(clusters_transformed);
-                publishDetectedObjects(clusters_transformed, in_image_detections);
+                if (use_camera) {
+                        publishDetectedObjects(clusters_transformed, in_image_detections);
+                } else {
+                        publishDetectedObjectsWithoutCamera(clusters_transformed);
+                }
         } else
         {
                 in_publisher->publish(in_clusters);
-                publishDetectedObjects(in_clusters, in_image_detections);
+                if (use_camera) {
+                        publishDetectedObjects(in_clusters, in_image_detections);
+                } else {
+                        publishDetectedObjectsWithoutCamera(in_clusters);
+                }
         }
 }
 
@@ -1023,6 +1068,12 @@ void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud,
         publishCloudClusters(&_pub_clusters_message, cloud_clusters, _output_frame, _velodyne_header, in_image_detections);
 }
 
+void velodyne_callback_no_camera(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud)
+{
+        vision_msgs::Detection2DArrayConstPtr empty_image_detections(new vision_msgs::Detection2DArray);
+        velodyne_callback(in_sensor_cloud, empty_image_detections);
+}
+
 int main(int argc, char **argv)
 {
         // Initialize ROS
@@ -1040,7 +1091,7 @@ int main(int argc, char **argv)
         _transform_listener = &listener;
 
         ROS_INFO("[%s] generating colors ...", __APP_NAME__);
-                                      #if (CV_MAJOR_VERSION == 3)
+                                      #if (CV_MAJOR_VERSION >= 3)
         generateColors(_colors, 255);
                                       #else
         cv::generateColors(_colors, 255);
@@ -1077,13 +1128,23 @@ int main(int argc, char **argv)
                 ROS_INFO("[%s] No points_node received, defaulting to calib.txt", __APP_NAME__);
         }
 
+        nh.param("autoware_tracker/cluster/use_callback", use_callback, use_callback);
+        ROS_INFO("[%s] use_callback: %d", __APP_NAME__, use_callback);
+
+        nh.param("autoware_tracker/cluster/use_camera", use_camera, use_camera);
+        ROS_INFO("[%s] use_camera: %d", __APP_NAME__, use_camera);
+        nh.param<std::string>("autoware_tracker/cluster/no_camera_label", no_camera_label, no_camera_label);
+        ROS_INFO("[%s] no_camera_label: %s", __APP_NAME__, no_camera_label.c_str());
+
         if (nh.getParam("autoware_tracker/cluster/iou_threshold", iou_threshold)) {
                 ROS_INFO("[%s] Setting points_node to %f", __APP_NAME__, iou_threshold);
         } else {
                 ROS_INFO("[%s] No points_node received, defaulting to 0.5", __APP_NAME__);
         }
 
-        calib = new Calibration(extrinsic_calibration_file);
+        if (use_camera) {
+                calib = new Calibration(extrinsic_calibration_file);
+        }
         // yang21itsc
 
         _use_diffnormals = false;
@@ -1096,12 +1157,6 @@ int main(int argc, char **argv)
         }
 
         /* Initialize tuning parameter */
-        
-        nh.param("autoware_tracker/cluster/use_callback", use_callback, use_callback);
-        ROS_INFO("[%s] use_callback: %d", __APP_NAME__, use_callback);
-
-        nh.param("autoware_tracker/cluster/use_camera", use_camera, use_camera);
-        ROS_INFO("[%s] use_camera: %d", __APP_NAME__, use_camera);
 
         nh.param<std::string>("autoware_tracker/cluster/output_frame", _output_frame, "velodyne");
         ROS_INFO("[%s] output_frame: %s", __APP_NAME__, _output_frame.c_str());
@@ -1200,14 +1255,16 @@ int main(int argc, char **argv)
                 ROS_INFO("cluster_ranges: %f", item);
         }
 
-        message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, points_topic, 10);
-        message_filters::Subscriber<vision_msgs::Detection2DArray> image_detections_sub(nh, image_detections_topic, 10);
-        
-        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, vision_msgs::Detection2DArray> MySyncPolicy;
-        // ApproximateTime takes a queue size as its constructor argument, hence MySyncPolicy(10)
-        message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), points_sub, image_detections_sub);
-        sync.registerCallback(boost::bind(&velodyne_callback, _1, _2));
+        if (use_camera) {
+                message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, points_topic, 10);
+                message_filters::Subscriber<vision_msgs::Detection2DArray> image_detections_sub(nh, image_detections_topic, 10);
 
-
-        ros::spin();
+                typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, vision_msgs::Detection2DArray> MySyncPolicy;
+                message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), points_sub, image_detections_sub);
+                sync.registerCallback(boost::bind(&velodyne_callback, _1, _2));
+                ros::spin();
+        } else {
+                ros::Subscriber points_sub = nh.subscribe(points_topic, 10, velodyne_callback_no_camera);
+                ros::spin();
+        }
 }

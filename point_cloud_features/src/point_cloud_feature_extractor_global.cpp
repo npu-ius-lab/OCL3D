@@ -39,6 +39,7 @@
 #include "pointnet_3d_box_stamped/PointNet3DBoxStampedArray.h"
 static ros::Subscriber object_sub;
 static ros::Publisher features_pub;
+static bool include_unknown_labels = false;
 
 
 void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg){
@@ -95,7 +96,7 @@ void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg
 
 
 
-                                if (objects_msg->objects[i].label != "9"){
+                                if (include_unknown_labels || objects_msg->objects[i].label != "9"){
                                         pointnet_3d_box_stamped::PointNet3DBoxStamped features_msg;
                                         features_msg.label = objects_msg->objects[i].label;
                                         features_msg.id = objects_msg->objects[i].id;
@@ -145,9 +146,9 @@ int main(int argc, char **argv) {
         autoware_tracker::DetectedObjectArray::ConstPtr objects_msg;
         ros::init(argc, argv, "point_cloud_features_");
         ros::NodeHandle private_nh("~");
+        private_nh.param<bool>("include_unknown_labels", include_unknown_labels, false);
         features_pub = private_nh.advertise<pointnet_3d_box_stamped::PointNet3DBoxStampedArray>("features_global", 100); 
         object_sub = private_nh.subscribe("/autoware_tracker/cluster/objects", 100, Callback);
         
         ros::spin();
 }
-

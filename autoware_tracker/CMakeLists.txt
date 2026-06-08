@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(autoware_tracker)
 
 set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_CXX_FLAGS "-std=c++14")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -pthread")
 
 find_package(catkin REQUIRED COMPONENTS
@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
     image_transport
     jsk_recognition_msgs
     jsk_rviz_plugins
+    vision_msgs
     message_generation
 )
 
@@ -52,6 +53,7 @@ catkin_package(
     image_transport
     jsk_recognition_msgs
     jsk_rviz_plugins
+    vision_msgs
     message_runtime
     message_generation
 )
@@ -74,11 +76,13 @@ add_executable(visualize_detected_objects
 add_dependencies(visualize_detected_objects ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(visualize_detected_objects ${OpenCV_LIBRARIES} ${EIGEN3_LIBRARIES} ${catkin_LIBRARIES})
 
-add_executable(visual_test
-    src/detected_objects_visualizer/visual_test.cpp
-    )
-add_dependencies(visual_test ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(visual_test ${OpenCV_LIBRARIES} ${EIGEN3_LIBRARIES} ${catkin_LIBRARIES})
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/detected_objects_visualizer/visual_test.cpp)
+    add_executable(visual_test
+        src/detected_objects_visualizer/visual_test.cpp
+        )
+    add_dependencies(visual_test ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+    target_link_libraries(visual_test ${OpenCV_LIBRARIES} ${EIGEN3_LIBRARIES} ${catkin_LIBRARIES})
+endif()
 
 
 

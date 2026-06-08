@@ -61,6 +61,9 @@ int main(int argc, char **argv) {
 
         while (ros::ok()) {
                 objects_msg = ros::topic::waitForMessage<autoware_tracker::DetectedObjectArray>("/autoware_tracker/tracker/examples"); // process blocked waiting
+                if (!objects_msg) {
+                        continue;
+                }
                 
                 std_msgs::String features_msg;
                 int number_of_samples = 0;

@@ -64,7 +64,10 @@ def do_train_task():
     global sample_count
     while not rospy.is_shutdown():
         print('*'*15,'online incremental training starting','*'*15)
-        point_feature = rospy.wait_for_message('/point_cloud_features/features', String)
+        try:
+            point_feature = rospy.wait_for_message('/point_cloud_features/features', String)
+        except rospy.exceptions.ROSInterruptException:
+            break
         start = time.time()
         if point_feature.data:
             samples = loadmsg(point_feature)
@@ -85,7 +88,7 @@ eval_dict['wrong_det'] = 0
 eval_dict['epoch'] = 0
 eval_dict['confusion_matrix'] = metrics.ConfusionMatrix()
 def features_callback(features_msg):
-    global save_dir
+    global save_dir, fallback_label
 
     global eval_dict,evalkitti
     eval_dict['callback_cn'] += 1
@@ -123,17 +126,18 @@ def features_callback(features_msg):
             predict = model_train.predict_proba_one(x) #预测的结果
             try:
                 res['predict'] = max(predict, key=predict.get)
+                res['conf'] =  predict[res['predict']]
             except:
                 eval_dict['no_det'] += 1#统计未分类的次数
-                print('can not get predict may be empty')
-                continue
+                res['predict'] = fallback_label or data.label
+                res['conf'] = 0.0
+                print('can not get predict may be empty, using fallback label', res['predict'])
 
             if res['predict'] != data.label:
                 eval_dict['wrong_det'] += 1
             
             eval_dict['confusion_matrix'].update(data.label,res['predict'])
 
-            res['conf'] =  predict[res['predict']]
             res['pose'] = data.pose
             res['dimensions'] = data.dimensions
             res['frame'] = features_msg.frame_out
@@ -144,9 +148,11 @@ def features_callback(features_msg):
             rf_msg.header = features_msg.header
  
             rf_msg.label = res['predict']
+            rf_msg.score = res['conf']
             rf_msg.pose= data.pose
             rf_msg.dimensions = data.dimensions
             rf_msg.header.frame_id = "velodyne"
+            rf_msg.valid = True
             rf_msg_array.objects.append(rf_msg)
         rate = (eval_dict['test_samples'] - eval_dict['wrong_det'] - eval_dict['no_det']) / eval_dict['test_samples'] * 100
         print(f'total rate is {rate}% with test ',eval_dict['test_samples'], 'samples,wrong det ',eval_dict['wrong_det'], 'samples,no det', eval_dict['no_det'],'samples')
@@ -168,13 +174,17 @@ def features_callback(features_msg):
 evalkitti = True
 
 
-save_dir = '/home/tianbot/online_learning_ws_mini/data_kitti/iusl_key_frame/IMF_workdir/iusl_11_5_pointnet/clear'
+save_dir = os.path.expanduser('~/ocl3d_imf_workdir')
+fallback_label = ''
 if __name__ == '__main__':
     seed(1)
     rospy.init_node("random_forest_node_online")
     seq = rospy.get_param('/random_forest_node_online/scence')
     noise = rospy.get_param('/random_forest_node_online/noise')
     kitti = rospy.get_param('/random_forest_node_online/kitti')
+    save_dir = os.path.expanduser(rospy.get_param('~save_dir', save_dir))
+    fallback_label = rospy.get_param('~fallback_label', fallback_label)
+    os.makedirs(save_dir, exist_ok=True)
     model_train = forest.AMFClassifier(
         n_estimators=50,
         use_aggregation=True,
@@ -183,10 +193,11 @@ if __name__ == '__main__':
     )
     RF_label_pub = rospy.Publisher("/online_random_forest/rf_label", DetectedObjectArray, queue_size=10)
 
-    load_weights = False
+    load_weights = rospy.get_param('~load_weights', False)
+    model_file_name = os.path.expanduser(rospy.get_param('~model_file_name', ''))
 
-    if load_weights:
-        model_train = joblib.load('/home/tianbot/online_learning_ws_mini/data_kitti/iusl_key_frame/IMF_workdir/iusl_11_5_pointnet/clear/epoch_04.pth')#clear
+    if load_weights and model_file_name:
+        model_train = joblib.load(model_file_name)
 
 
     feature_sub = rospy.Subscriber("/point_cloud_features_global/features_global", PointNet3DBoxStampedArray, features_callback,queue_size=100)
@@ -196,6 +207,3 @@ if __name__ == '__main__':
         train_thread.start()
     except:
         print ("Error: can't start thread")
-
-
-
