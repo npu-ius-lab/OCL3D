@@ -26,3 +26,13 @@ target_link_libraries(kitti_camera_ros ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${Op
 if(catkin_EXPORTED_TARGETS)
   add_dependencies(kitti_camera_ros ${catkin_EXPORTED_TARGETS})
 endif()
+
+catkin_install_python(PROGRAMS
+  scripts/yolov8_camera_ros.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(PROGRAMS
+  scripts/yolov8_camera_ros
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)

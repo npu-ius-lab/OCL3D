@@ -31,7 +31,7 @@ autoware_tracker:
         pose_estimation: true
 
         use_callback: true
-        use_camera: false
+        use_camera: true
         no_camera_label: "9"
 
     tracker:

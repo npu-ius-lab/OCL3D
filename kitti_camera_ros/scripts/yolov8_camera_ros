@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONDA_PYTHON="${YOLOV8_PYTHON:-/home/ros/anaconda3/envs/minklocv2/bin/python}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+exec "$CONDA_PYTHON" "$SCRIPT_DIR/yolov8_camera_ros.py" "$@"

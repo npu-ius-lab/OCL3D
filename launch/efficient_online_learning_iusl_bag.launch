@@ -5,8 +5,26 @@
   <arg name="load_weights" default="false" />
   <arg name="model_file_name" default="" />
   <arg name="fallback_label" default="9" />
+  <arg name="use_camera" default="true" />
+  <arg name="use_yolo" default="true" />
+  <arg name="yolo_image_topic" default="/hikrobot_camera/rgb/compressed" />
+  <arg name="yolo_model" default="yolov8n.pt" />
+  <arg name="yolo_confidence" default="0.25" />
+  <arg name="yolo_iou" default="0.45" />
+  <arg name="cyclist_iou" default="0.4" />
+  <arg name="yolo_device" default="" />
 
   <rosparam file="$(find autoware_tracker)/config/params_iusl_bag_2023_04_25.yaml" command="load" subst_value="true" />
+  <param name="autoware_tracker/cluster/use_camera" type="bool" value="$(arg use_camera)" />
+
+  <node if="$(arg use_yolo)" pkg="kitti_camera_ros" type="yolov8_camera_ros" name="yolov8_camera_ros" output="screen">
+    <param name="image_topic" type="string" value="$(arg yolo_image_topic)" />
+    <param name="model" type="string" value="$(arg yolo_model)" />
+    <param name="confidence" type="double" value="$(arg yolo_confidence)" />
+    <param name="iou" type="double" value="$(arg yolo_iou)" />
+    <param name="cyclist_iou" type="double" value="$(arg cyclist_iou)" />
+    <param name="device" type="string" value="$(arg yolo_device)" />
+  </node>
 
   <node pkg="autoware_tracker" type="lidar_euclidean_cluster_detect" name="lidar_euclidean_cluster_detect" output="screen" />
   <node pkg="autoware_tracker" type="imm_ukf_pda" name="imm_ukf_pda" output="screen" />
