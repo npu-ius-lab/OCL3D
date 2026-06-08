@@ -60,7 +60,6 @@ void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg
                 int number_of_car_count = 0;
                 int number_of_ped_count = 0;
                 int number_of_cyc_count = 0;
-                ros::Rate loop_rate(10); 
                 clock_t start = clock(); 
                 srand(time(0)); // Use the time function to get a "seed” value for srand
                 
@@ -142,15 +141,14 @@ void Callback(const autoware_tracker::DetectedObjectArray::ConstPtr& objects_msg
                 // std::cout << "******in point cloud feature features_msg_array.fea_boxes[0].header.seq****** " << features_msg_array.fea_boxes[0].header.seq<< std::endl;        
                 // std::cerr << features_msg_array.fea_boxes[0].header.stamp << std::endl;        
                 features_pub.publish(features_msg_array);
-                loop_rate.sleep();
         }  
 int main(int argc, char **argv) {
         autoware_tracker::DetectedObjectArray::ConstPtr objects_msg;
         ros::init(argc, argv, "point_cloud_features_");
         ros::NodeHandle private_nh("~");
         private_nh.param<bool>("include_unknown_labels", include_unknown_labels, false);
-        features_pub = private_nh.advertise<pointnet_3d_box_stamped::PointNet3DBoxStampedArray>("features_global", 100); 
-        object_sub = private_nh.subscribe("/autoware_tracker/cluster/objects", 100, Callback);
+        features_pub = private_nh.advertise<pointnet_3d_box_stamped::PointNet3DBoxStampedArray>("features_global", 1);
+        object_sub = private_nh.subscribe("/autoware_tracker/cluster/objects", 1, Callback);
         
         ros::spin();
 }

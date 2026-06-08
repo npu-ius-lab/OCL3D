@@ -139,7 +139,14 @@ def features_callback(features_msg):
     global eval_dict,evalkitti
     eval_dict['callback_cn'] += 1
 
-    print('*'*15,'online incremental testing starting','*'*15,'with ',eval_dict['callback_cn'],' callback function')
+    if eval_dict['callback_cn'] % 30 == 1:
+        rospy.loginfo(
+            "online RF callback=%d test_samples=%d replay_samples=%d buffer_sizes=%s",
+            eval_dict['callback_cn'],
+            eval_dict['test_samples'],
+            replay_sample_count,
+            replay_buffer.sizes(),
+        )
     
     if eval_dict['callback_cn'] % 4722 == 0:
         eval_dict['epoch'] = eval_dict['callback_cn'] // 4722
@@ -158,13 +165,11 @@ def features_callback(features_msg):
             save_model_path = os.path.join(save_dir,'epoch_04.pth') 
             joblib.dump(model_train,save_model_path)
 
-    print('current epoch is ',eval_dict['epoch'],'current callback_cn is ',eval_dict['callback_cn'])
     rf_msg_array = DetectedObjectArray()
     rf_msg_array.header = features_msg.header
     result = []
     if (features_msg.number_of_samples != 0 ):
         for data in features_msg.fea_boxes:
-            print(features_msg.frame_out,data.header.seq)
             eval_dict['test_samples'] += 1 #统计测试次数
             x = {}
             for i, value in enumerate(data.features):
@@ -184,7 +189,7 @@ def features_callback(features_msg):
                 eval_dict['no_det'] += 1#统计未分类的次数
                 res['predict'] = normalize_label(fallback_label or data.label)
                 res['conf'] = 0.0
-                print('can not get predict may be empty, using fallback label', res['predict'])
+                rospy.logwarn_throttle(2.0, 'can not get predict may be empty, using fallback label %s', res['predict'])
 
             if res['predict'] != label:
                 eval_dict['wrong_det'] += 1
@@ -208,13 +213,21 @@ def features_callback(features_msg):
             rf_msg.valid = True
             rf_msg_array.objects.append(rf_msg)
         rate = (eval_dict['test_samples'] - eval_dict['wrong_det'] - eval_dict['no_det']) / eval_dict['test_samples'] * 100
-        print(f'total rate is {rate}% with test ',eval_dict['test_samples'], 'samples,wrong det ',eval_dict['wrong_det'], 'samples,no det', eval_dict['no_det'],'samples')
-        print('learned current samples', sample_count, 'replay samples', replay_sample_count, 'buffer sizes', replay_buffer.sizes())
+        if eval_dict['callback_cn'] % 30 == 1:
+            rospy.loginfo(
+                "online RF rate=%.2f%% test=%d wrong=%d no_det=%d current_samples=%d replay_samples=%d",
+                rate,
+                eval_dict['test_samples'],
+                eval_dict['wrong_det'],
+                eval_dict['no_det'],
+                sample_count,
+                replay_sample_count,
+            )
         
 
 
     else:
-        print('get empty frame ')
+        rospy.logdebug('get empty frame')
     
  
 
@@ -257,7 +270,7 @@ if __name__ == '__main__':
         dirichlet=0.5,
         seed=1
     )
-    RF_label_pub = rospy.Publisher("/online_random_forest/rf_label", DetectedObjectArray, queue_size=10)
+    RF_label_pub = rospy.Publisher("/online_random_forest/rf_label", DetectedObjectArray, queue_size=1)
 
     load_weights = rospy.get_param('~load_weights', False)
     model_file_name = os.path.expanduser(rospy.get_param('~model_file_name', ''))
@@ -266,6 +279,6 @@ if __name__ == '__main__':
         model_train = joblib.load(model_file_name)
 
 
-    feature_sub = rospy.Subscriber("/point_cloud_features_global/features_global", PointNet3DBoxStampedArray, features_callback,queue_size=100)
-    print('*'*15,'start online incremental learning','*'*15)
+    feature_sub = rospy.Subscriber("/point_cloud_features_global/features_global", PointNet3DBoxStampedArray, features_callback, queue_size=1, buff_size=2**20)
+    rospy.loginfo('start online incremental learning')
     rospy.spin()
