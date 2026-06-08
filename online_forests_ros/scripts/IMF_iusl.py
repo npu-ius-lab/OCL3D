@@ -160,6 +160,7 @@ def features_callback(features_msg):
 
     print('current epoch is ',eval_dict['epoch'],'current callback_cn is ',eval_dict['callback_cn'])
     rf_msg_array = DetectedObjectArray()
+    rf_msg_array.header = features_msg.header
     result = []
     if (features_msg.number_of_samples != 0 ):
         for data in features_msg.fea_boxes:
@@ -198,13 +199,12 @@ def features_callback(features_msg):
 
             result.append(res)
             rf_msg = DetectedObject()
-            rf_msg.header = features_msg.header
+            rf_msg.header = data.header if data.header.frame_id else features_msg.header
  
             rf_msg.label = res['predict']
             rf_msg.score = res['conf']
             rf_msg.pose= data.pose
             rf_msg.dimensions = data.dimensions
-            rf_msg.header.frame_id = "velodyne"
             rf_msg.valid = True
             rf_msg_array.objects.append(rf_msg)
         rate = (eval_dict['test_samples'] - eval_dict['wrong_det'] - eval_dict['no_det']) / eval_dict['test_samples'] * 100
@@ -220,7 +220,6 @@ def features_callback(features_msg):
 
     rf_msg_array.frame_out = features_msg.frame_out
 
-    rf_msg_array.header.frame_id = "velodyne"
     RF_label_pub.publish(rf_msg_array)
     
 
