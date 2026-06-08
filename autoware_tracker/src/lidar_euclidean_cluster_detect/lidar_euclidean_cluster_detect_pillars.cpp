@@ -105,6 +105,7 @@ ros::Publisher _pub_points_lanes_cloud;
 
 ros::Publisher _pub_detected_objects;
 ros::Publisher _pub_detected_objects_Predict;
+ros::Publisher _pub_cluster_boxes_markers;
 std_msgs::Header _velodyne_header;
 
 std::string _output_frame;
@@ -332,8 +333,6 @@ geometry_msgs::Vector3 estimate_size(autoware_tracker::DetectedObject in_object)
                 dimensions.x = 1.7911454;
                 dimensions.y = 0.78559974;
                 dimensions.z = 1.83601675;
-        } else{
-                std::cout<< "unknow label"<<std::endl;
         }
         return dimensions;
 }
@@ -441,6 +440,37 @@ double computedis(geometry_msgs::Pose pose1,geometry_msgs::Pose pose2){
 
 // yang21itsc
 int cout_in = -1;
+
+void publishClusterBoxes(const autoware_tracker::CloudClusterArray &in_clusters)
+{
+        visualization_msgs::MarkerArray markers;
+        for (size_t i = 0; i < in_clusters.clusters.size(); ++i)
+        {
+                const auto &cluster = in_clusters.clusters[i];
+                if (cluster.dimensions.x <= 0.0 || cluster.dimensions.y <= 0.0 || cluster.dimensions.z <= 0.0)
+                {
+                        continue;
+                }
+
+                visualization_msgs::Marker marker;
+                marker.header = in_clusters.header;
+                marker.ns = "lidar_cluster_boxes";
+                marker.id = static_cast<int>(i);
+                marker.type = visualization_msgs::Marker::CUBE;
+                marker.action = visualization_msgs::Marker::ADD;
+                marker.pose = cluster.bounding_box.pose;
+                marker.scale = cluster.dimensions;
+                marker.color.r = 1.0;
+                marker.color.g = 0.75;
+                marker.color.b = 0.05;
+                marker.color.a = 0.18;
+                marker.lifetime = ros::Duration(0.2);
+                markers.markers.push_back(marker);
+        }
+
+        _pub_cluster_boxes_markers.publish(markers);
+}
+
 std::vector<autoware_tracker::DetectedObjectArray>  fusionBox(const pcl::PointCloud<pcl::PointXYZI>::Ptr in_cloud_ptr,autoware_tracker::DetectedObjectArray detected_objects,const jsk_recognition_msgs::BoundingBoxArrayConstPtr& pillars_detections_sub){
         std::cout << "pointpillars has " << pillars_detections_sub->boxes.size() << " boxes --- cluster and projection has "<<detected_objects.objects.size() << " boxes" << std::endl;
 
@@ -809,11 +839,13 @@ void publishCloudClusters(const ros::Publisher *in_publisher,const pcl::PointClo
                         }
                 }
                 in_publisher->publish(clusters_transformed);
+                publishClusterBoxes(clusters_transformed);
                 publishDetectedObjects(clusters_transformed, in_image_detections,in_cloud_ptr,pillars_detections_sub);
         } else
         {
              
                 in_publisher->publish(in_clusters);
+                publishClusterBoxes(in_clusters);
                 publishDetectedObjects(in_clusters, in_image_detections,in_cloud_ptr,pillars_detections_sub);
         }
 }
@@ -1436,6 +1468,7 @@ int main(int argc, char **argv)
         _pub_clusters_message = nh.advertise<autoware_tracker::CloudClusterArray>("autoware_tracker/cluster/cloud_clusters", 10);
         _pub_detected_objects = nh.advertise<autoware_tracker::DetectedObjectArray>("autoware_tracker/cluster/objects", 10);
         _pub_detected_objects_Predict = nh.advertise<autoware_tracker::DetectedObjectArray>("autoware_tracker/cluster/objects_Predict", 10);
+        _pub_cluster_boxes_markers = nh.advertise<visualization_msgs::MarkerArray>("autoware_tracker/cluster/cluster_boxes", 10);
         std::string points_topic = "/points_raw";
         if (nh.getParam("autoware_tracker/cluster/points_node", points_topic)) {
                 ROS_INFO("[%s] Setting points_node to %s", __APP_NAME__, points_topic.c_str());

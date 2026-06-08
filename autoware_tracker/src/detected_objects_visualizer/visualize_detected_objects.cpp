@@ -19,6 +19,28 @@
 
 #include "visualize_detected_objects.h"
 
+namespace
+{
+bool IsPersonObject(const autoware_tracker::DetectedObject &object)
+{
+        return object.label == "1";
+}
+
+autoware_tracker::DetectedObjectArray FilterPersonObjects(const autoware_tracker::DetectedObjectArray &in_objects)
+{
+        autoware_tracker::DetectedObjectArray person_objects = in_objects;
+        person_objects.objects.clear();
+        for (const auto &object : in_objects.objects)
+        {
+                if (IsPersonObject(object))
+                {
+                        person_objects.objects.push_back(object);
+                }
+        }
+        return person_objects;
+}
+}
+
 VisualizeDetectedObjects::VisualizeDetectedObjects() : arrow_height_(0.5), label_height_(1.0),label_height_forests_(1.5)
 {
         ros::NodeHandle private_nh_;//("~");
@@ -123,6 +145,7 @@ std_msgs::ColorRGBA VisualizeDetectedObjects::ParseColor(const std::vector<doubl
 
 void VisualizeDetectedObjects::DetectedObjectsCallback(const autoware_tracker::DetectedObjectArray &in_objects)
 {
+        autoware_tracker::DetectedObjectArray person_objects = FilterPersonObjects(in_objects);
         visualization_msgs::MarkerArray label_markers, arrow_markers, centroid_markers, polygon_hulls, bounding_boxes,
                                         object_models;
 
@@ -130,12 +153,12 @@ void VisualizeDetectedObjects::DetectedObjectsCallback(const autoware_tracker::D
 
         marker_id_ = 0;
 
-        label_markers = ObjectsToLabels(in_objects);
-        arrow_markers = ObjectsToArrows(in_objects);
-        polygon_hulls = ObjectsToHulls(in_objects);
-        bounding_boxes = ObjectsToBoxes(in_objects);
-        object_models = ObjectsToModels(in_objects);
-        centroid_markers = ObjectsToCentroids(in_objects);
+        label_markers = ObjectsToLabels(person_objects);
+        arrow_markers = ObjectsToArrows(person_objects);
+        polygon_hulls = ObjectsToHulls(person_objects);
+        bounding_boxes = ObjectsToBoxes(person_objects);
+        object_models = ObjectsToModels(person_objects);
+        centroid_markers = ObjectsToCentroids(person_objects);
 
         visualization_markers.markers.insert(visualization_markers.markers.end(),
                                              label_markers.markers.begin(), label_markers.markers.end());
@@ -173,8 +196,6 @@ geometry_msgs::Vector3 VisualizeDetectedObjects::estimate_size(const autoware_tr
                 dimensions.x = 1.7911454;
                 dimensions.y = 0.78559974;
                 dimensions.z = 1.83601675;
-        } else{
-                std::cout<< "unknow label"<<std::endl;
         }
         return dimensions;
 }
@@ -283,6 +304,8 @@ visualization_msgs::Marker VisualizeDetectedObjects::getMarker(std::vector<geome
         marker.type = visualization_msgs::Marker::LINE_LIST;
         marker.action = visualization_msgs::Marker::ADD;
         marker.scale.x = 0.1;
+        marker.scale.y = 0.1;
+        marker.scale.z = 0.1;
 
         marker.color.r = 0.0;
         marker.color.g = 1.0;
@@ -344,7 +367,6 @@ visualization_msgs::MarkerArray VisualizeDetectedObjects::estimate_vis(const aut
                 // 四元数转欧拉角
                 double rot_z = quat2rot_z(object);
                 rot_z = estimate_rot_z(object,rot_z);
-                std::cout << "estimated rot z is " <<rot_z << std::endl;
                 // 计算八个顶点
                 std::vector<geometry_msgs::Point> vertices = getEightVertices(object,rot_z,object.pose);
 
@@ -361,6 +383,7 @@ visualization_msgs::MarkerArray VisualizeDetectedObjects::estimate_vis(const aut
 //yao
 void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedObjectArray &in_objects)
 {       
+        autoware_tracker::DetectedObjectArray person_objects = FilterPersonObjects(in_objects);
         visualization_msgs::MarkerArray label_markers, arrow_markers, centroid_markers, polygon_hulls, bounding_boxes,bounding_boxes_esti,object_models;
 
         visualization_msgs::MarkerArray visualization_markers;
@@ -368,11 +391,11 @@ void VisualizeDetectedObjects::ForestCallback(const autoware_tracker::DetectedOb
 
         marker_id_ = 0;
 
-        label_markers = ObjectsToLabels_forests(in_objects);
-        centroid_markers = ObjectsToCentroids_forests(in_objects);
+        label_markers = ObjectsToLabels_forests(person_objects);
+        centroid_markers = ObjectsToCentroids_forests(person_objects);
 
-        bounding_boxes = ObjectsToBoxes_forests(in_objects);
-        bounding_boxes_esti = estimate_vis(in_objects);
+        bounding_boxes = ObjectsToBoxes_forests(person_objects);
+        bounding_boxes_esti = estimate_vis(person_objects);
 
         visualization_markers.markers.insert(visualization_markers.markers.end(),
                                              label_markers.markers.begin(), label_markers.markers.end());
@@ -495,8 +518,6 @@ visualization_msgs::MarkerArray VisualizeDetectedObjects::ObjectsToBoxes_forests
                         double roll, pitch, yaw;
                         
                         tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
-                        std::cout << "in visualize yaw is " << yaw << std::endl;
-                        
                         double rot_z = estimate_rot_z(object,yaw);
                         geometry_msgs::Quaternion quat = tf::createQuaternionMsgFromYaw(rot_z);
 
@@ -610,6 +631,8 @@ VisualizeDetectedObjects::ObjectsToHulls(const autoware_tracker::DetectedObjectA
                         hull.ns = "hull_markers";
                         hull.id = marker_id_++;
                         hull.scale.x = 0.2;
+                        hull.scale.y = 0.2;
+                        hull.scale.z = 0.2;
 
                         
                         for(auto const &point: object.convex_hull.polygon.points)
