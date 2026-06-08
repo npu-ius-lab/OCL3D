@@ -12,16 +12,29 @@ autoware_tracker:
         downsample_cloud: true
         leaf_size: 0.1
 
-        use_multiple_thres: false
+        use_multiple_thres: true
 
         cluster_size_min: 3
-        cluster_size_max: 10000
-        clip_min_height: -5.0
-        clip_max_height: 5.0
-        cluster_merge_threshold: 1.2
-        clustering_distance: 1.5
+        cluster_size_max: 800
+        clip_min_height: -2.2
+        clip_max_height: 2.8
+        cluster_merge_threshold: 0.35
+        clustering_distance: 0.35
+        cluster_distances: [0.18, 0.25, 0.35, 0.45, 0.60]
+        cluster_ranges: [6.0, 12.0, 18.0, 24.0]
         remove_points_min: 0.8
-        remove_points_max: 80.0
+        remove_points_max: 30.0
+        roi_forward_distance: 30.0
+        roi_backward_distance: 30.0
+        roi_left_distance: 30.0
+        roi_right_distance: 30.0
+        enable_person_size_filter: true
+        person_min_height: 0.35
+        person_max_height: 2.4
+        person_min_width: 0.05
+        person_max_width: 1.2
+        person_min_length: 0.05
+        person_max_length: 1.8
 
         keep_lanes: false
         keep_lane_left_distance: 5.0

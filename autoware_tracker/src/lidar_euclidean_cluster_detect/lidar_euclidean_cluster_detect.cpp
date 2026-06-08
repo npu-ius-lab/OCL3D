@@ -128,8 +128,19 @@ static double _keep_lane_right_distance;
 
 static double _remove_points_min;
 static double _remove_points_max;
+static double _roi_forward_distance;
+static double _roi_backward_distance;
+static double _roi_left_distance;
+static double _roi_right_distance;
 static double _cluster_merge_threshold;
 static double _clustering_distance;
+static bool _enable_person_size_filter;
+static double _person_min_height;
+static double _person_max_height;
+static double _person_min_width;
+static double _person_max_width;
+static double _person_min_length;
+static double _person_max_length;
 
 static std::chrono::system_clock::time_point _start, _end;
 
@@ -148,6 +159,23 @@ tf::TransformListener *_transform_listener;
 tf::TransformListener *_vectormap_transform_listener;
 
 int count = -1;
+
+bool isPersonSizedCluster(const ClusterPtr &cluster)
+{
+        if (!_enable_person_size_filter)
+        {
+                return true;
+        }
+
+        const geometry_msgs::Vector3 dimensions = cluster->GetBoundingBox().dimensions;
+        const double length = std::max(dimensions.x, dimensions.y);
+        const double width = std::min(dimensions.x, dimensions.y);
+        const double height = dimensions.z;
+
+        return height >= _person_min_height && height <= _person_max_height &&
+               width >= _person_min_width && width <= _person_max_width &&
+               length >= _person_min_length && length <= _person_max_length;
+}
 
 void publishClusterBoxes(const autoware_tracker::CloudClusterArray &in_clusters)
 {
@@ -894,8 +922,6 @@ void segmentByDistance(const pcl::PointCloud<pcl::PointXYZI>::Ptr in_cloud_ptr,
         // Get final PointCloud to be published
         for (unsigned int i = 0; i < final_clusters.size(); i++)
         {
-                *out_cloud_ptr = *out_cloud_ptr + *(final_clusters[i]->GetCloud());
-
                 jsk_recognition_msgs::BoundingBox bounding_box = final_clusters[i]->GetBoundingBox();
                 geometry_msgs::PolygonStamped polygon = final_clusters[i]->GetPolygon();
                 jsk_rviz_plugins::Pictogram pictogram_cluster;
@@ -928,8 +954,9 @@ void segmentByDistance(const pcl::PointCloud<pcl::PointXYZI>::Ptr in_cloud_ptr,
                 bounding_box.header = _velodyne_header;
                 polygon.header = _velodyne_header;
 
-                if (final_clusters[i]->IsValid())
+                if (final_clusters[i]->IsValid() && isPersonSizedCluster(final_clusters[i]))
                 {
+                        *out_cloud_ptr = *out_cloud_ptr + *(final_clusters[i]->GetCloud());
 
                         in_out_centroids.points.push_back(centroid);
 
@@ -1081,6 +1108,37 @@ void removePointsUpTo(const pcl::PointCloud<pcl::PointXYZI>::Ptr in_cloud_ptr,
         }
 }
 
+void cropCloudToVehicleRoi(const pcl::PointCloud<pcl::PointXYZI>::Ptr in_cloud_ptr,
+                           pcl::PointCloud<pcl::PointXYZI>::Ptr out_cloud_ptr,
+                           const double min_dist,
+                           const double forward_distance,
+                           const double backward_distance,
+                           const double left_distance,
+                           const double right_distance)
+{
+        out_cloud_ptr->points.clear();
+        out_cloud_ptr->points.reserve(in_cloud_ptr->points.size());
+
+        for (const auto &point : in_cloud_ptr->points)
+        {
+                const double origin_distance = sqrt(pow(point.x, 2) + pow(point.y, 2));
+                if (origin_distance <= min_dist)
+                {
+                        continue;
+                }
+                if (point.x > forward_distance || point.x < -backward_distance)
+                {
+                        continue;
+                }
+                if (point.y > left_distance || point.y < -right_distance)
+                {
+                        continue;
+                }
+
+                out_cloud_ptr->points.push_back(point);
+        }
+}
+
 
 void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud,
                        const vision_msgs::Detection2DArrayConstPtr& in_image_detections)
@@ -1111,15 +1169,9 @@ void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud,
 
         _velodyne_header = in_sensor_cloud->header;
 
-        // remove points too close or too far
-        if (_remove_points_min > 0.0)
-        {
-                removePointsUpTo(current_sensor_cloud_ptr, removed_points_cloud_ptr, _remove_points_min, _remove_points_max);
-        }
-        else
-        {
-                removed_points_cloud_ptr = current_sensor_cloud_ptr;
-        }
+        cropCloudToVehicleRoi(current_sensor_cloud_ptr, removed_points_cloud_ptr, _remove_points_min,
+                              _roi_forward_distance, _roi_backward_distance,
+                              _roi_left_distance, _roi_right_distance);
 
         // downsample cloud
         if (_downsample_cloud)
@@ -1294,6 +1346,25 @@ int main(int argc, char **argv)
         ROS_INFO("[%s] remove_points_min: %f", __APP_NAME__, _remove_points_min);
         nh.param("autoware_tracker/cluster/remove_points_max", _remove_points_max, 0.0);
         ROS_INFO("[%s] remove_points_max: %f", __APP_NAME__, _remove_points_max);
+        nh.param("autoware_tracker/cluster/roi_forward_distance", _roi_forward_distance, 30.0);
+        ROS_INFO("[%s] roi_forward_distance: %f", __APP_NAME__, _roi_forward_distance);
+        nh.param("autoware_tracker/cluster/roi_backward_distance", _roi_backward_distance, 30.0);
+        ROS_INFO("[%s] roi_backward_distance: %f", __APP_NAME__, _roi_backward_distance);
+        nh.param("autoware_tracker/cluster/roi_left_distance", _roi_left_distance, 30.0);
+        ROS_INFO("[%s] roi_left_distance: %f", __APP_NAME__, _roi_left_distance);
+        nh.param("autoware_tracker/cluster/roi_right_distance", _roi_right_distance, 30.0);
+        ROS_INFO("[%s] roi_right_distance: %f", __APP_NAME__, _roi_right_distance);
+        nh.param("autoware_tracker/cluster/enable_person_size_filter", _enable_person_size_filter, true);
+        ROS_INFO("[%s] enable_person_size_filter: %d", __APP_NAME__, _enable_person_size_filter);
+        nh.param("autoware_tracker/cluster/person_min_height", _person_min_height, 0.35);
+        nh.param("autoware_tracker/cluster/person_max_height", _person_max_height, 2.4);
+        nh.param("autoware_tracker/cluster/person_min_width", _person_min_width, 0.05);
+        nh.param("autoware_tracker/cluster/person_max_width", _person_max_width, 1.2);
+        nh.param("autoware_tracker/cluster/person_min_length", _person_min_length, 0.05);
+        nh.param("autoware_tracker/cluster/person_max_length", _person_max_length, 1.8);
+        ROS_INFO("[%s] person size filter h[%f,%f] w[%f,%f] l[%f,%f]", __APP_NAME__,
+                 _person_min_height, _person_max_height, _person_min_width, _person_max_width,
+                 _person_min_length, _person_max_length);
 
         nh.param("autoware_tracker/cluster/use_multiple_thres", _use_multiple_thres, false);
         ROS_INFO("[%s] use_multiple_thres: %d", __APP_NAME__, _use_multiple_thres);
@@ -1312,50 +1383,29 @@ int main(int argc, char **argv)
         nh.param<bool>("autoware_tracker/cluster/iskitti", iskitti, true);    
         ROS_INFO("[%s] iskitti: %d", __APP_NAME__, iskitti);
 
-        std::vector<double> cluster_distance = {0.3,0.5,0.8,1.4,2.4};
-        std::vector<double> cluster_range = {15,30,45,60};
+        std::vector<double> cluster_distance = {0.18, 0.25, 0.35, 0.45, 0.60};
+        std::vector<double> cluster_range = {6, 12, 18, 24};
         nh.getParam("autoware_tracker/cluster/cluster_distances", cluster_distance);
-
-
-        
+        nh.getParam("autoware_tracker/cluster/cluster_ranges", cluster_range);
 
 
         double timestamp;
         if (_use_multiple_thres)
-        {       
-                if (iskitti)
+        {
+                _clustering_distances = cluster_distance;
+                _clustering_ranges = cluster_range;
+                if (_clustering_distances.size() != 5 || _clustering_ranges.size() != 4)
                 {
-
-
-                        _clustering_distances = cluster_distance;
-                        _clustering_ranges = cluster_range;
-
+                        ROS_WARN("[%s] adaptive clustering requires 5 cluster_distances and 4 cluster_ranges, falling back to single threshold.",
+                                 __APP_NAME__);
+                        _use_multiple_thres = false;
                 }
-                else{
-                        _clustering_distances.push_back(0.4);
-                        _clustering_distances.push_back(0.6);
-                        _clustering_distances.push_back(0.8);
-                        _clustering_distances.push_back(1.0);
-                        _clustering_distances.push_back(1.2);//10.25 1.2 
-
-
-
-                        _clustering_ranges.push_back(4);
-                        _clustering_ranges.push_back(8);
-                        _clustering_ranges.push_back(12);
-                        _clustering_ranges.push_back(16);  
-                }
-
-
-
         }
-        for (const auto &item : cluster_distance) {
+        for (const auto &item : _clustering_distances) {
                 ROS_INFO("cluster_distances: %f", item);
         }
 
-        nh.getParam("autoware_tracker/cluster/cluster_ranges", cluster_range);
-
-        for (const auto &item : cluster_range) {
+        for (const auto &item : _clustering_ranges) {
                 ROS_INFO("cluster_ranges: %f", item);
         }
 
