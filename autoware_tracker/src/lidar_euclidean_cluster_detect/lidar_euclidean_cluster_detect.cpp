@@ -152,31 +152,101 @@ int count = -1;
 void publishClusterBoxes(const autoware_tracker::CloudClusterArray &in_clusters)
 {
         visualization_msgs::MarkerArray markers;
+        visualization_msgs::Marker delete_marker;
+        delete_marker.header = in_clusters.header;
+        delete_marker.ns = "lidar_cluster_boxes";
+        delete_marker.pose.orientation.w = 1.0;
+        delete_marker.scale.x = 0.08;
+        delete_marker.scale.y = 0.08;
+        delete_marker.scale.z = 0.08;
+        delete_marker.action = visualization_msgs::Marker::DELETEALL;
+        markers.markers.push_back(delete_marker);
+
         for (size_t i = 0; i < in_clusters.clusters.size(); ++i)
         {
                 const auto &cluster = in_clusters.clusters[i];
-                if (cluster.dimensions.x <= 0.0 || cluster.dimensions.y <= 0.0 || cluster.dimensions.z <= 0.0)
+                const auto &points = cluster.convex_hull.polygon.points;
+                if (points.size() < 6 || points.size() % 2 != 0)
                 {
                         continue;
                 }
 
+                const size_t layer_size = points.size() / 2;
                 visualization_msgs::Marker marker;
                 marker.header = in_clusters.header;
                 marker.ns = "lidar_cluster_boxes";
                 marker.id = static_cast<int>(i);
-                marker.type = visualization_msgs::Marker::CUBE;
+                marker.type = visualization_msgs::Marker::LINE_LIST;
                 marker.action = visualization_msgs::Marker::ADD;
-                marker.pose = cluster.bounding_box.pose;
-                marker.scale = cluster.dimensions;
+                marker.pose.orientation.w = 1.0;
+                marker.scale.x = 0.08;
+                marker.scale.y = 0.08;
+                marker.scale.z = 0.08;
                 marker.color.r = 1.0;
                 marker.color.g = 0.75;
                 marker.color.b = 0.05;
-                marker.color.a = 0.18;
+                marker.color.a = 0.85;
                 marker.lifetime = ros::Duration(0.2);
+
+                for (size_t j = 0; j + 1 < layer_size; ++j)
+                {
+                        geometry_msgs::Point bottom_start;
+                        bottom_start.x = points[j].x;
+                        bottom_start.y = points[j].y;
+                        bottom_start.z = points[j].z;
+                        geometry_msgs::Point bottom_end;
+                        bottom_end.x = points[j + 1].x;
+                        bottom_end.y = points[j + 1].y;
+                        bottom_end.z = points[j + 1].z;
+                        geometry_msgs::Point top_start;
+                        top_start.x = points[j + layer_size].x;
+                        top_start.y = points[j + layer_size].y;
+                        top_start.z = points[j + layer_size].z;
+                        geometry_msgs::Point top_end;
+                        top_end.x = points[j + layer_size + 1].x;
+                        top_end.y = points[j + layer_size + 1].y;
+                        top_end.z = points[j + layer_size + 1].z;
+
+                        marker.points.push_back(bottom_start);
+                        marker.points.push_back(bottom_end);
+                        marker.points.push_back(top_start);
+                        marker.points.push_back(top_end);
+                        marker.points.push_back(bottom_start);
+                        marker.points.push_back(top_start);
+                }
                 markers.markers.push_back(marker);
         }
 
         _pub_cluster_boxes_markers.publish(markers);
+}
+
+geometry_msgs::PolygonStamped transformPolygon(const geometry_msgs::PolygonStamped &in_polygon,
+                                               const std::string &in_target_frame,
+                                               const std_msgs::Header &in_source_header)
+{
+        geometry_msgs::PolygonStamped out_polygon;
+        out_polygon.header = in_source_header;
+        out_polygon.header.frame_id = in_target_frame;
+        out_polygon.polygon.points.reserve(in_polygon.polygon.points.size());
+
+        for (const auto &point : in_polygon.polygon.points)
+        {
+                geometry_msgs::PointStamped point_in;
+                geometry_msgs::PointStamped point_out;
+                point_in.header = in_source_header;
+                point_in.point.x = point.x;
+                point_in.point.y = point.y;
+                point_in.point.z = point.z;
+                _transform_listener->transformPoint(in_target_frame, ros::Time(), point_in, in_source_header.frame_id, point_out);
+
+                geometry_msgs::Point32 point32_out;
+                point32_out.x = point_out.point.x;
+                point32_out.y = point_out.point.y;
+                point32_out.z = point_out.point.z;
+                out_polygon.polygon.points.push_back(point32_out);
+        }
+
+        return out_polygon;
 }
 
 tf::StampedTransform findTransform(const std::string &in_target_frame, const std::string &in_source_frame)
@@ -476,7 +546,7 @@ void publishCloudClusters(const ros::Publisher *in_publisher, const autoware_tra
                                 cluster_transformed.eigen_values = i->eigen_values;
                                 cluster_transformed.eigen_vectors = i->eigen_vectors;
 
-                                cluster_transformed.convex_hull = i->convex_hull;
+                                cluster_transformed.convex_hull = transformPolygon(i->convex_hull, in_target_frame, in_header);
                                 cluster_transformed.bounding_box.pose.position = i->bounding_box.pose.position;
                                 if(_pose_estimation)
                                 {
